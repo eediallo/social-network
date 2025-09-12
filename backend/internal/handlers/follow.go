@@ -47,6 +47,8 @@ func (h *FollowHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "conflict", http.StatusConflict)
 		return
 	}
+	// notify target user of follow request
+	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), toUserID, "follow_request", sess.UserID, id)
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id, "status": "pending"})
 }
@@ -66,6 +68,8 @@ func (h *FollowHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = h.DB.Exec("INSERT OR IGNORE INTO follows(follower_user_id, followed_user_id) VALUES(?,?)", fromID, toID)
 	_, _ = h.DB.Exec("UPDATE follow_requests SET status = 'accepted' WHERE id = ?", reqID)
+	// notify requester of acceptance
+	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), fromID, "follow_accepted", toID, reqID)
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
 }

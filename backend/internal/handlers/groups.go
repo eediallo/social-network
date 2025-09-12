@@ -91,6 +91,8 @@ func (h *GroupsHandler) Invite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "conflict", http.StatusConflict)
 		return
 	}
+	// notify invited user
+	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), body.UserID, "group_invite", sess.UserID, iid)
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": iid, "status": "pending"})
 }
 
@@ -140,6 +142,12 @@ func (h *GroupsHandler) RequestJoin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "conflict", http.StatusConflict)
 		return
 	}
+	// notify group owner
+	var owner string
+	_ = h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&owner)
+	if owner != "" {
+		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), owner, "group_join_request", sess.UserID, rid)
+	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": rid, "status": "pending"})
 }
 
@@ -164,6 +172,8 @@ func (h *GroupsHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?,'member')", gid, userID)
 	_, _ = h.DB.Exec("UPDATE group_requests SET status='accepted' WHERE id = ?", rid)
+	// notify requester
+	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), userID, "group_join_accepted", sess.UserID, rid)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
 }
 
@@ -213,6 +223,17 @@ func (h *GroupsHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.DB.Exec("INSERT INTO events(id, group_id, title, description, datetime) VALUES(?,?,?,?,?)", eid, gid, body.Title, body.Description, body.Datetime); err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
+	}
+	// notify all group members about new event
+	rows, err := h.DB.Query("SELECT user_id FROM group_members WHERE group_id = ?", gid)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var uid string
+			if err := rows.Scan(&uid); err == nil {
+				_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), uid, "group_event_created", sess.UserID, eid)
+			}
+		}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": eid})
 }

@@ -6,6 +6,7 @@ import (
 
 	"social-network/backend/internal/auth"
 	"social-network/backend/internal/handlers"
+	ws "social-network/backend/internal/websocket"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -51,6 +52,11 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.Get("/api/users/{id}/profile", profileHandler.GetProfile)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Patch("/api/me/profile/privacy", profileHandler.TogglePrivacy)
 
+	// WebSocket
+	wsHub := ws.NewHub()
+	wsHandler := &handlers.WSHandler{DB: db, Hub: wsHub}
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/ws", wsHandler.Serve)
+
 	groupsHandler := &handlers.GroupsHandler{DB: db}
 	r.Route("/api/groups", func(r chi.Router) {
 		r.Get("/", groupsHandler.ListGroups)
@@ -65,6 +71,11 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/events", groupsHandler.CreateEvent)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/events/{eventID}/respond", groupsHandler.RespondEvent)
 	})
+
+	// Notifications
+	nHandler := &handlers.NotificationsHandler{DB: db}
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/notifications", nHandler.List)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/notifications/read", nHandler.MarkRead)
 
 	return r
 }

@@ -70,6 +70,12 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/requests/{reqID}/decline", groupsHandler.DeclineRequest)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/events", groupsHandler.CreateEvent)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/events/{eventID}/respond", groupsHandler.RespondEvent)
+
+		// Group posts & comments
+		gp := &handlers.GroupPostsHandler{DB: db}
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/posts", gp.CreatePost)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/{id}/posts", gp.ListPosts)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/posts/{postID}/comments", gp.AddComment)
 	})
 
 	// Notifications

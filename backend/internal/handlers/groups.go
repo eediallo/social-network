@@ -1,0 +1,250 @@
+package handlers
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/http"
+
+	"social-network/backend/internal/auth"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+)
+
+type GroupsHandler struct{ DB *sql.DB }
+
+type createGroupReq struct{ Title, Description string }
+
+func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var body createGroupReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Title == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	gid := uuid.NewString()
+	if _, err := h.DB.Exec("INSERT INTO groups(id, owner_user_id, title, description) VALUES(?,?,?,?)", gid, sess.UserID, body.Title, body.Description); err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	// owner is a member
+	_, _ = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?,'owner')", gid, sess.UserID)
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": gid})
+}
+
+func (h *GroupsHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.DB.Query("SELECT id, owner_user_id, title, description, created_at FROM groups ORDER BY created_at DESC LIMIT 100")
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type g struct{ ID, OwnerID, Title, Description, CreatedAt string }
+	var out []g
+	for rows.Next() {
+		var x g
+		_ = rows.Scan(&x.ID, &x.OwnerID, &x.Title, &x.Description, &x.CreatedAt)
+		out = append(out, x)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+func (h *GroupsHandler) GetGroup(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var owner, title, desc, created string
+	if err := h.DB.QueryRow("SELECT owner_user_id, title, description, created_at FROM groups WHERE id = ?", id).Scan(&owner, &title, &desc, &created); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": id, "owner_user_id": owner, "title": title, "description": desc, "created_at": created})
+}
+
+type inviteReq struct {
+	UserID string `json:"user_id"`
+}
+
+func (h *GroupsHandler) Invite(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	// only members can invite
+	var count int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&count)
+	if count == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var body inviteReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.UserID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	iid := uuid.NewString()
+	if _, err := h.DB.Exec("INSERT INTO group_invitations(id, group_id, from_user_id, to_user_id, status) VALUES(?,?,?,?, 'pending')", iid, gid, sess.UserID, body.UserID); err != nil {
+		http.Error(w, "conflict", http.StatusConflict)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": iid, "status": "pending"})
+}
+
+func (h *GroupsHandler) AcceptInvitation(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	iid := chi.URLParam(r, "invID")
+	var toUser string
+	if err := h.DB.QueryRow("SELECT to_user_id FROM group_invitations WHERE id = ? AND group_id = ? AND status='pending'", iid, gid).Scan(&toUser); err != nil || toUser != sess.UserID {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	_, _ = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?,'member')", gid, sess.UserID)
+	_, _ = h.DB.Exec("UPDATE group_invitations SET status='accepted' WHERE id = ?", iid)
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
+}
+
+func (h *GroupsHandler) DeclineInvitation(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	iid := chi.URLParam(r, "invID")
+	_, err := h.DB.Exec("UPDATE group_invitations SET status='declined' WHERE id = ? AND group_id = ? AND to_user_id = ? AND status='pending'", iid, gid, sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "declined"})
+}
+
+func (h *GroupsHandler) RequestJoin(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	rid := uuid.NewString()
+	if _, err := h.DB.Exec("INSERT INTO group_requests(id, group_id, user_id, status) VALUES(?,?,?, 'pending')", rid, gid, sess.UserID); err != nil {
+		http.Error(w, "conflict", http.StatusConflict)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": rid, "status": "pending"})
+}
+
+func (h *GroupsHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	rid := chi.URLParam(r, "reqID")
+	// only owner can accept
+	var owner string
+	if err := h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&owner); err != nil || owner != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var userID string
+	if err := h.DB.QueryRow("SELECT user_id FROM group_requests WHERE id = ? AND group_id = ? AND status='pending'", rid, gid).Scan(&userID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	_, _ = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?,'member')", gid, userID)
+	_, _ = h.DB.Exec("UPDATE group_requests SET status='accepted' WHERE id = ?", rid)
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
+}
+
+func (h *GroupsHandler) DeclineRequest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	rid := chi.URLParam(r, "reqID")
+	var owner string
+	if err := h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&owner); err != nil || owner != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	_, err := h.DB.Exec("UPDATE group_requests SET status='declined' WHERE id = ? AND group_id = ? AND status='pending'", rid, gid)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "declined"})
+}
+
+type createEventReq struct{ Title, Description, Datetime string }
+
+func (h *GroupsHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	// must be member
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var body createEventReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Title == "" || body.Datetime == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	eid := uuid.NewString()
+	if _, err := h.DB.Exec("INSERT INTO events(id, group_id, title, description, datetime) VALUES(?,?,?,?,?)", eid, gid, body.Title, body.Description, body.Datetime); err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": eid})
+}
+
+type rsvpReq struct {
+	Status string `json:"status"`
+}
+
+func (h *GroupsHandler) RespondEvent(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	eid := chi.URLParam(r, "eventID")
+	// member check
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	var body rsvpReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || (body.Status != "going" && body.Status != "not_going") {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	_, err := h.DB.Exec("INSERT INTO event_responses(event_id, user_id, status) VALUES(?,?,?) ON CONFLICT(event_id,user_id) DO UPDATE SET status=excluded.status, responded_at=CURRENT_TIMESTAMP", eid, sess.UserID, body.Status)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": body.Status})
+}

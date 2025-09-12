@@ -1,1 +1,15 @@
-social-network.pdf
+# Node modules
+node_modules/
+# Build artifacts
+**/dist/
+**/build/
+# Go
+**/*.exe
+**/*.test
+**/*.out
+/backend/data/
+backend/.env
+# IDE
+.vscode/
+.idea/
+.DS_Store

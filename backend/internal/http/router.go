@@ -65,6 +65,8 @@ func NewRouter(db *sql.DB) http.Handler {
 	wsHub := ws.NewHub()
 	wsHandler := &handlers.WSHandler{DB: db, Hub: wsHub}
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/ws", wsHandler.Serve)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/messages/direct", wsHandler.ListDirectMessages)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/messages/group", wsHandler.ListGroupMessages)
 
 	groupsHandler := &handlers.GroupsHandler{DB: db}
 	r.Route("/api/groups", func(r chi.Router) {

@@ -80,4 +80,76 @@ func (h *WSHandler) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// no extra helpers
+// List direct message history between two users
+func (h *WSHandler) ListDirectMessages(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	otherID := r.URL.Query().Get("user_id")
+	if otherID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	rows, err := h.DB.Query(`SELECT id, from_user_id, to_user_id, text, created_at FROM direct_messages WHERE (from_user_id = ? AND to_user_id = ?) OR (from_user_id = ? AND to_user_id = ?) ORDER BY created_at ASC`, sess.UserID, otherID, otherID, sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type msg struct {
+		ID        string `json:"id"`
+		FromID    string `json:"from_user_id"`
+		ToID      string `json:"to_user_id"`
+		Text      string `json:"text"`
+		CreatedAt string `json:"created_at"`
+	}
+	var out []msg
+	for rows.Next() {
+		var m msg
+		_ = rows.Scan(&m.ID, &m.FromID, &m.ToID, &m.Text, &m.CreatedAt)
+		out = append(out, m)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// List group message history
+func (h *WSHandler) ListGroupMessages(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := r.URL.Query().Get("group_id")
+	if gid == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	// membership check
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	rows, err := h.DB.Query("SELECT id, from_user_id, text, created_at FROM group_messages WHERE group_id = ? ORDER BY created_at ASC", gid)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type gmsg struct {
+		ID        string `json:"id"`
+		FromID    string `json:"from_user_id"`
+		Text      string `json:"text"`
+		CreatedAt string `json:"created_at"`
+	}
+	var out []gmsg
+	for rows.Next() {
+		var m gmsg
+		_ = rows.Scan(&m.ID, &m.FromID, &m.Text, &m.CreatedAt)
+		out = append(out, m)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -8,15 +8,32 @@ import {
 } from "react-router-dom";
 import Login from "./components/Login";
 import Register from "./components/Register";
-import Logout from "./components/Logout"
+import Logout from "./components/Logout";
 import "./App.css";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        setIsAuthenticated(res.ok);
+      } catch {
+        setIsAuthenticated(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkSession();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
 
   return (
     <Router>
-          <nav style={{ textAlign: "center", margin: "2rem 0" }}>
+      <nav style={{ textAlign: "center", margin: "2rem 0" }}>
         <Link to="/login">
           <button style={{ marginRight: "1rem" }}>Login</button>
         </Link>
@@ -40,9 +57,24 @@ function App() {
         />
         <Route
           path="/logout"
-          element={<Logout onLogout={() => setIsAuthenticated(false)} />}
+          element={
+            isAuthenticated ? (
+              <Logout onLogout={() => setIsAuthenticated(false)} />
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
         />
-        <Route path="/" element={<Home isAuthenticated={isAuthenticated} />} />
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Home isAuthenticated={isAuthenticated} />
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
+        />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

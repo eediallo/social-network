@@ -1,35 +1,65 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  Navigate,
+} from "react-router-dom";
+import Login from "./components/Login";
+import Register from "./components/Register";
+import Logout from "./components/Logout"
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <Router>
+          <nav style={{ textAlign: "center", margin: "2rem 0" }}>
+        <Link to="/login">
+          <button style={{ marginRight: "1rem" }}>Login</button>
+        </Link>
+        <Link to="/register">
+          <button>Register</button>
+        </Link>
+        {isAuthenticated && (
+          <Link to="/logout">
+            <button style={{ marginLeft: "1rem" }}>Logout</button>
+          </Link>
+        )}
+      </nav>
+      <Routes>
+        <Route
+          path="/login"
+          element={<Login onLogin={() => setIsAuthenticated(true)} />}
+        />
+        <Route
+          path="/register"
+          element={<Register onRegister={() => setIsAuthenticated(false)} />}
+        />
+        <Route
+          path="/logout"
+          element={<Logout onLogout={() => setIsAuthenticated(false)} />}
+        />
+        <Route path="/" element={<Home isAuthenticated={isAuthenticated} />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </Router>
+  );
 }
 
-export default App
+function Home({ isAuthenticated }) {
+  return (
+    <main style={{ textAlign: "center", marginTop: "4rem" }}>
+      <h1>Welcome to Social Network</h1>
+      <p>
+        {isAuthenticated
+          ? "You are logged in."
+          : "Please login or register to continue."}
+      </p>
+    </main>
+  );
+}
+
+export default App;

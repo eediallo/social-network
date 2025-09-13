@@ -69,6 +69,10 @@ func (h *WSHandler) Serve(w http.ResponseWriter, r *http.Request) {
 			// persist
 			_, _ = h.DB.Exec("INSERT INTO direct_messages(id, from_user_id, to_user_id, text) VALUES(?,?,?,?)", uuid.NewString(), sess.UserID, m.To, m.Text)
 			h.Hub.BroadcastToUser(m.To, data)
+			// create notification for recipient
+			if m.To != sess.UserID {
+				_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id, created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)", uuid.NewString(), m.To, "direct_message", sess.UserID, "")
+			}
 		case "group":
 			if m.To == "" || m.Text == "" {
 				continue
@@ -76,6 +80,17 @@ func (h *WSHandler) Serve(w http.ResponseWriter, r *http.Request) {
 			// optional: membership check omitted for brevity
 			_, _ = h.DB.Exec("INSERT INTO group_messages(id, group_id, from_user_id, text) VALUES(?,?,?,?)", uuid.NewString(), m.To, sess.UserID, m.Text)
 			h.Hub.BroadcastToGroup(m.To, data)
+			// create notification for all group members except sender
+			rows, err := h.DB.Query("SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?", m.To, sess.UserID)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var uid string
+					if err := rows.Scan(&uid); err == nil {
+						_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id, created_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)", uuid.NewString(), uid, "group_message", sess.UserID, m.To)
+					}
+				}
+			}
 		}
 	}
 }

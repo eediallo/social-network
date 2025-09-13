@@ -106,3 +106,40 @@ func (h *GroupPostsHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id})
 }
+
+// List comments for a group post
+func (h *GroupPostsHandler) ListComments(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	postID := chi.URLParam(r, "postID")
+	// membership check
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	rows, err := h.DB.Query("SELECT id, user_id, text, created_at FROM group_comments WHERE group_post_id = ? ORDER BY created_at ASC", postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type gc struct {
+		ID        string `json:"id"`
+		UserID    string `json:"user_id"`
+		Text      string `json:"text"`
+		CreatedAt string `json:"created_at"`
+	}
+	var out []gc
+	for rows.Next() {
+		var c gc
+		_ = rows.Scan(&c.ID, &c.UserID, &c.Text, &c.CreatedAt)
+		out = append(out, c)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}

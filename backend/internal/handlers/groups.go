@@ -269,3 +269,75 @@ func (h *GroupsHandler) RespondEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": body.Status})
 }
+
+// List all events for a group
+func (h *GroupsHandler) ListEvents(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	// member check
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	rows, err := h.DB.Query("SELECT id, title, description, datetime FROM events WHERE group_id = ? ORDER BY datetime ASC", gid)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type event struct {
+		ID          string `json:"id"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Datetime    string `json:"datetime"`
+	}
+	var out []event
+	for rows.Next() {
+		var e event
+		_ = rows.Scan(&e.ID, &e.Title, &e.Description, &e.Datetime)
+		out = append(out, e)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// List all responses for a given event
+func (h *GroupsHandler) ListEventResponses(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	eid := chi.URLParam(r, "eventID")
+	// member check
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	rows, err := h.DB.Query("SELECT user_id, status, responded_at FROM event_responses WHERE event_id = ? ORDER BY responded_at ASC", eid)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type response struct {
+		UserID      string `json:"user_id"`
+		Status      string `json:"status"`
+		RespondedAt string `json:"responded_at"`
+	}
+	var out []response
+	for rows.Next() {
+		var r response
+		_ = rows.Scan(&r.UserID, &r.Status, &r.RespondedAt)
+		out = append(out, r)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}

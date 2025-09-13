@@ -42,10 +42,7 @@ func (h *ImagesHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 	filename := fmt.Sprintf("avatar_%s%s", sess.UserID, extFromContentType(handler.Header.Get("Content-Type")))
 	path := filepath.Join(h.StorageDir, filename)
-	log.Println(h.StorageDir, "<====h.StorageDir======")
-	log.Println(path, "<====path======")
 	out, err := os.Create(path)
-	log.Println(out, "<====OUT======")
 	if err != nil {
 		log.Printf("File create error: %v", err)
 		http.Error(w, "server error", http.StatusInternalServerError)

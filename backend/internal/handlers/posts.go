@@ -122,6 +122,13 @@ func (h *PostsHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
+	// Notify post owner if commenter is not the owner
+	var postOwnerID string
+	err = h.DB.QueryRow("SELECT user_id FROM posts WHERE id = ?", postID).Scan(&postOwnerID)
+	if err == nil && postOwnerID != sess.UserID {
+		notifID := uuid.NewString()
+		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id, created_at) VALUES(?,?,?,?,?,?)", notifID, postOwnerID, "comment", sess.UserID, postID, time.Now())
+	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id})
 }
 

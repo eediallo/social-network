@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useUser } from "../context/UserContext";
 
-export default function Register({ onRegister }) {
+export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -9,6 +10,7 @@ export default function Register({ onRegister }) {
   const [nickname, setNickname] = useState("");
   const [about, setAbout] = useState("");
   const [error, setError] = useState("");
+  const { login } = useUser();
 
   async function handleRegister(e) {
     e.preventDefault();
@@ -28,7 +30,8 @@ export default function Register({ onRegister }) {
       credentials: "include",
     });
     if (res.ok) {
-      onRegister();
+      const userData = await res.json().catch(() => null);
+      if (userData) login(userData);
     } else {
       setError("Registration failed");
     }

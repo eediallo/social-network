@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -8,25 +8,41 @@ import {
 } from "react-router-dom";
 import Login from "./components/Login";
 import Register from "./components/Register";
-import Logout from "./components/Logout";
+import LogoutMessage from "./components/Logout";
+import { UserProvider, useUser } from "./context/UserContext";
+import ProtectedRoute from "./components/ProtectedRoute";
 import "./App.css";
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  return (
+    <UserProvider>
+      <AppRoutes />
+    </UserProvider>
+  );
+}
+
+function AppRoutes() {
+  const { isAuthenticated, login, logout } = useUser();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function checkSession() {
       try {
         const res = await fetch("/api/auth/me", { credentials: "include" });
-        setIsAuthenticated(res.ok);
+        if (res.ok) {
+          const userData = await res.json();
+          login(userData);
+        } else {
+          logout();
+        }
       } catch {
-        setIsAuthenticated(false);
+        logout();
       } finally {
         setLoading(false);
       }
     }
     checkSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) return <div>Loading...</div>;
@@ -47,19 +63,13 @@ function App() {
         )}
       </nav>
       <Routes>
-        <Route
-          path="/login"
-          element={<Login onLogin={() => setIsAuthenticated(true)} />}
-        />
-        <Route
-          path="/register"
-          element={<Register onRegister={() => setIsAuthenticated(false)} />}
-        />
+        <Route path="/login" element={<Login onLogin={login} />} />
+        <Route path="/register" element={<Register onRegister={logout} />} />
         <Route
           path="/logout"
           element={
             isAuthenticated ? (
-              <Logout onLogout={() => setIsAuthenticated(false)} />
+              <LogoutMessage onLogout={logout} />
             ) : (
               <Navigate to="/login" />
             )
@@ -68,11 +78,9 @@ function App() {
         <Route
           path="/"
           element={
-            isAuthenticated ? (
+            <ProtectedRoute>
               <Home isAuthenticated={isAuthenticated} />
-            ) : (
-              <Navigate to="/login" />
-            )
+            </ProtectedRoute>
           }
         />
         <Route path="*" element={<Navigate to="/" />} />

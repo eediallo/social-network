@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useUser } from "../context/UserContext";
 
-export default function Login({ onLogin }) {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const { login } = useUser();
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -15,7 +17,12 @@ export default function Login({ onLogin }) {
       credentials: "include",
     });
     if (res.ok) {
-      onLogin();
+      // Fetch user data after login
+      const meRes = await fetch("/api/auth/me", { credentials: "include" });
+      if (meRes.ok) {
+        const userData = await meRes.json();
+        login(userData);
+      }
     } else {
       setError("Invalid credentials");
     }

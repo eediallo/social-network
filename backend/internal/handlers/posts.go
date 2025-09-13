@@ -124,3 +124,48 @@ func (h *PostsHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id})
 }
+
+// List comments for a post
+func (h *PostsHandler) ListComments(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	postID := r.URL.Query().Get("post_id")
+	if postID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	// visibility check: reuse feed rules for a single post
+	visibleQ := `SELECT COUNT(1)
+	FROM posts p
+	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
+	LEFT JOIN post_allowed_followers paf ON paf.post_id = p.id AND paf.follower_user_id = ?
+	WHERE p.id = ? AND (p.privacy='public' OR (p.privacy='followers' AND f.follower_user_id IS NOT NULL) OR (p.privacy='selected' AND paf.follower_user_id IS NOT NULL))`
+	var cnt int
+	_ = h.DB.QueryRow(visibleQ, sess.UserID, sess.UserID, postID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	rows, err := h.DB.Query("SELECT id, user_id, text, created_at FROM comments WHERE post_id = ? ORDER BY created_at ASC", postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type comment struct {
+		ID        string `json:"id"`
+		UserID    string `json:"user_id"`
+		Text      string `json:"text"`
+		CreatedAt string `json:"created_at"`
+	}
+	var out []comment
+	for rows.Next() {
+		var c comment
+		_ = rows.Scan(&c.ID, &c.UserID, &c.Text, &c.CreatedAt)
+		out = append(out, c)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}

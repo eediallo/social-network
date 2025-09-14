@@ -14,6 +14,7 @@ import { useUser } from "./context/useUser";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Profile from "./components/Profile";
 import EditProfile from "./components/EditProfile";
+import Feed from "./components/Feed";
 import "./App.css";
 
 function App() {
@@ -87,7 +88,7 @@ function AppRoutes() {
           path="/"
           element={
             <ProtectedRoute>
-              <Home isAuthenticated={isAuthenticated} />
+              <Feed />
             </ProtectedRoute>
           }
         />

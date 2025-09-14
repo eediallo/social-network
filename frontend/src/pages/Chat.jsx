@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUser } from '../context/useUser';
+import { formatRelativeTime } from '../utils/dateUtils';
+import { getInitials } from '../utils/avatarUtils';
 
 export default function Chat() {
   const { user } = useUser();
@@ -12,8 +14,74 @@ export default function Chat() {
   const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
 
+  // Mock data for testing UI
+  const mockConversations = [
+    {
+      id: '1',
+      type: 'direct',
+      name: 'John Doe',
+      lastMessage: 'Hey, how are you doing?',
+      lastMessageTime: new Date().toISOString(),
+      unreadCount: 2,
+      user: { first_name: 'John', last_name: 'Doe' }
+    },
+    {
+      id: '2',
+      type: 'direct',
+      name: 'Jane Smith',
+      lastMessage: 'Thanks for the help!',
+      lastMessageTime: new Date(Date.now() - 1800000).toISOString(),
+      unreadCount: 0,
+      user: { first_name: 'Jane', last_name: 'Smith' }
+    },
+    {
+      id: '3',
+      type: 'group',
+      name: 'Tech Enthusiasts',
+      lastMessage: 'Alex: Check out this new framework!',
+      lastMessageTime: new Date(Date.now() - 3600000).toISOString(),
+      unreadCount: 5,
+      user: { first_name: 'Tech', last_name: 'Enthusiasts' }
+    }
+  ];
+
+  const mockMessages = [
+    {
+      id: '1',
+      text: 'Hey, how are you doing?',
+      user_id: '2',
+      first_name: 'John',
+      last_name: 'Doe',
+      created_at: new Date().toISOString(),
+      type: 'direct'
+    },
+    {
+      id: '2',
+      text: 'I\'m doing great! Thanks for asking. How about you?',
+      user_id: '1',
+      first_name: 'Test',
+      last_name: 'User',
+      created_at: new Date(Date.now() - 300000).toISOString(),
+      type: 'direct'
+    },
+    {
+      id: '3',
+      text: 'Pretty good! Just working on some new projects.',
+      user_id: '2',
+      first_name: 'John',
+      last_name: 'Doe',
+      created_at: new Date(Date.now() - 180000).toISOString(),
+      type: 'direct'
+    }
+  ];
+
   useEffect(() => {
-    // Initialize WebSocket connection
+    // Use mock data for UI testing
+    setMessages(mockMessages);
+    setLoading(false);
+    
+    // Initialize WebSocket connection (commented out for UI testing)
+    /*
     const connectWebSocket = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -45,6 +113,7 @@ export default function Chat() {
     };
 
     connectWebSocket();
+    */
 
     return () => {
       if (ws) {
@@ -81,18 +150,16 @@ export default function Chat() {
     }
   };
 
-  const startDirectChat = (userId) => {
-    setCurrentChat({ id: userId, name: `User ${userId}` });
+  const startDirectChat = (conversation) => {
+    setCurrentChat(conversation);
     setChatType('direct');
-    setMessages([]);
-    // In a real app, you'd fetch message history here
+    setMessages(mockMessages);
   };
 
-  const startGroupChat = (groupId) => {
-    setCurrentChat({ id: groupId, name: `Group ${groupId}` });
+  const startGroupChat = (conversation) => {
+    setCurrentChat(conversation);
     setChatType('group');
-    setMessages([]);
-    // In a real app, you'd fetch message history here
+    setMessages(mockMessages);
   };
 
   if (loading) {
@@ -134,27 +201,25 @@ export default function Chat() {
             <h3 className="chat-sidebar-title">Conversations</h3>
           </div>
           <div className="chat-list">
-            <div className="chat-item" onClick={() => startDirectChat('user1')}>
-              <div className="chat-avatar">U1</div>
-              <div className="chat-info">
-                <div className="chat-name">User 1</div>
-                <div className="chat-preview">Hello there!</div>
+            {mockConversations.map((conversation) => (
+              <div 
+                key={conversation.id} 
+                className={`chat-item ${currentChat?.id === conversation.id ? 'active' : ''}`}
+                onClick={() => conversation.type === 'direct' ? startDirectChat(conversation) : startGroupChat(conversation)}
+              >
+                <div className="chat-avatar">
+                  {getInitials(conversation.user.first_name, conversation.user.last_name)}
+                </div>
+                <div className="chat-info">
+                  <div className="chat-name">{conversation.name}</div>
+                  <div className="chat-preview">{conversation.lastMessage}</div>
+                  <div className="chat-time">{formatRelativeTime(conversation.lastMessageTime)}</div>
+                </div>
+                {conversation.unreadCount > 0 && (
+                  <div className="chat-unread">{conversation.unreadCount}</div>
+                )}
               </div>
-            </div>
-            <div className="chat-item" onClick={() => startDirectChat('user2')}>
-              <div className="chat-avatar">U2</div>
-              <div className="chat-info">
-                <div className="chat-name">User 2</div>
-                <div className="chat-preview">How are you?</div>
-              </div>
-            </div>
-            <div className="chat-item" onClick={() => startGroupChat('group1')}>
-              <div className="chat-avatar">G1</div>
-              <div className="chat-info">
-                <div className="chat-name">Group 1</div>
-                <div className="chat-preview">Group discussion</div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
         
@@ -176,16 +241,16 @@ export default function Chat() {
                   <div
                     key={index}
                     className={`chat-message ${
-                      message.from_user_id === user?.id ? 'own' : ''
+                      message.user_id === user?.id ? 'own' : ''
                     }`}
                   >
                     <div className="chat-message-avatar">
-                      {message.from_user_id === user?.id ? 'Me' : 'U'}
+                      {getInitials(message.first_name, message.last_name)}
                     </div>
                     <div className="chat-message-content">
                       <div className="chat-message-text">{message.text}</div>
                       <div className="chat-message-time">
-                        {new Date().toLocaleTimeString()}
+                        {formatRelativeTime(message.created_at)}
                       </div>
                     </div>
                   </div>

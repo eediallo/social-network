@@ -53,7 +53,19 @@ export default function Feed() {
       const res = await fetch('/api/feed', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setPosts(data);
+        // Map backend data to frontend format
+        const mappedPosts = data.map(post => ({
+          id: post.ID,
+          user_id: post.UserID,
+          text: post.Text,
+          privacy: post.Privacy,
+          created_at: post.CreatedAt,
+          first_name: 'User', // Default values since backend doesn't return user info
+          last_name: post.UserID.substring(0, 8),
+          likes: 0,
+          comments: 0
+        }));
+        setPosts(mappedPosts);
       } else {
         // Use mock data for testing UI improvements
         console.log('Using mock data for UI testing');

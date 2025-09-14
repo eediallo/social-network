@@ -6,16 +6,18 @@ import {
   Link,
   Navigate,
 } from "react-router-dom";
-import Login from "./components/Login";
-import Register from "./components/Register";
-import LogoutMessage from "./components/Logout";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Logout from "./pages/Logout";
+import Feed from "./pages/Feed";
+import Profile from "./pages/Profile";
+import Groups from "./pages/Groups";
+import Notifications from "./pages/Notifications";
+import Chat from "./pages/Chat";
 import { UserProvider } from "./context/UserContext";
 import { useUser } from "./context/useUser";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Profile from "./components/Profile";
-import EditProfile from "./components/EditProfile";
-import Feed from "./components/Feed";
-import "./App.css";
+import Navbar from "./components/Navbar";
 
 function App() {
   return (
@@ -49,67 +51,77 @@ function AppRoutes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="d-flex justify-center align-center" style={{ height: '100vh' }}>
+        <div className="loading"></div>
+      </div>
+    );
+  }
 
   return (
     <Router>
-      <nav style={{ textAlign: "center", margin: "2rem 0" }}>
-        <Link to="/login">
-          <button style={{ marginRight: "1rem" }}>Login</button>
-        </Link>
-        <Link to="/register">
-          <button>Register</button>
-        </Link>
-        {isAuthenticated && user && (
-          <Link to={`/profile/${user.id}`}>
-            <button style={{ marginLeft: "1rem" }}>My Profile</button>
-          </Link>
-        )}
-        {isAuthenticated && (
-          <Link to="/logout">
-            <button style={{ marginLeft: "1rem" }}>Logout</button>
-          </Link>
-        )}
-      </nav>
-      <Routes>
-        <Route path="/login" element={<Login onLogin={login} />} />
-        <Route path="/register" element={<Register onRegister={logout} />} />
-        <Route
-          path="/logout"
-          element={
-            isAuthenticated ? (
-              <LogoutMessage onLogout={logout} />
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Feed />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/profile/:id" element={<Profile />} />
-        <Route path="/me/edit" element={<EditProfile />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      <div className="d-flex flex-column" style={{ minHeight: '100vh' }}>
+        {isAuthenticated && <Navbar />}
+        <main className="flex-1">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route
+              path="/logout"
+              element={
+                isAuthenticated ? (
+                  <Logout />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Feed />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile/:id"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/groups"
+              element={
+                <ProtectedRoute>
+                  <Groups />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <Notifications />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <Chat />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </main>
+      </div>
     </Router>
-  );
-}
-
-function Home({ isAuthenticated }) {
-  return (
-    <main style={{ textAlign: "center", marginTop: "4rem" }}>
-      <h1>Welcome to Social Network</h1>
-      <p>
-        {isAuthenticated
-          ? "You are logged in."
-          : "Please login or register to continue."}
-      </p>
-    </main>
   );
 }
 

@@ -1,84 +1,93 @@
-import { useState } from "react";
-import { useUser } from "../context/useUser";
+import { useState } from 'react';
+import { useUser } from '../context/useUser';
 
-export default function PostComposer({ onPosted }) {
+export default function PostComposer({ onPostCreated }) {
   const { user } = useUser();
-  const [text, setText] = useState("");
-  const [image, setImage] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [text, setText] = useState('');
+  const [privacy, setPrivacy] = useState('public');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  async function submit(e) {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!text.trim() && !image) return;
-    setSubmitting(true);
+    if (!text.trim()) return;
+
+    setLoading(true);
+    setError('');
+
     try {
-      // Create the post first
-      const body = { text, privacy: "public" };
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(body),
+      const res = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text.trim(),
+          privacy: privacy
+        }),
+        credentials: 'include'
       });
+
       if (res.ok) {
-        // If there is an image, upload it with the returned post id
-        const j = await res.json();
-        const postID = j.id;
-        if (image && postID) {
-          const form = new FormData();
-          form.append("image", image);
-          form.append("post_id", postID);
-          const r2 = await fetch("/api/images/post", {
-            method: "POST",
-            body: form,
-            credentials: "include",
-          });
-          if (!r2.ok) {
-            console.error("failed to upload image for post", r2.status);
-          }
-        }
-        setText("");
-        setImage(null);
-        if (onPosted) onPosted();
+        const newPost = await res.json();
+        // Create a mock post object for the feed
+        const post = {
+          id: newPost.id,
+          user_id: user.id,
+          text: text.trim(),
+          privacy: privacy,
+          created_at: new Date().toISOString(),
+          first_name: user.first_name,
+          last_name: user.last_name
+        };
+        
+        onPostCreated(post);
+        setText('');
       } else {
-        console.error("failed to post", res.status);
+        const errorText = await res.text();
+        setError(errorText || 'Failed to create post');
       }
     } catch (err) {
-      console.error(err);
+      setError('Network error');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
-  }
+  };
 
   return (
-    <form onSubmit={submit} style={{ maxWidth: 600, margin: "0 auto 1rem" }}>
-      <div>
+    <div className="post-composer">
+      <form onSubmit={handleSubmit}>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={
-            user
-              ? `What's on your mind, ${
-                  user.first_name || user.nickname || "there"
-                }?`
-              : "What's on your mind?"
-          }
-          rows={4}
-          style={{ width: "100%" }}
+          placeholder={`What's on your mind, ${user?.first_name}?`}
+          disabled={loading}
         />
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setImage(e.target.files[0])}
-        />
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Posting..." : "Post"}
-        </button>
-      </div>
-    </form>
+        
+        <div className="post-composer-actions">
+          <div className="d-flex align-center gap-2">
+            <select
+              value={privacy}
+              onChange={(e) => setPrivacy(e.target.value)}
+              className="form-input"
+              style={{ width: 'auto', margin: 0 }}
+              disabled={loading}
+            >
+              <option value="public">🌍 Public</option>
+              <option value="followers">👥 Followers</option>
+              <option value="selected">👤 Selected</option>
+            </select>
+          </div>
+          
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || !text.trim()}
+          >
+            {loading ? <span className="loading"></span> : 'Post'}
+          </button>
+        </div>
+      </form>
+      
+      {error && <p className="form-error mt-2">{error}</p>}
+    </div>
   );
 }

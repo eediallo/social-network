@@ -99,10 +99,12 @@ export default function Profile() {
       
       if (res.ok) {
         const data = await res.json();
-        setFollowers(data);
+        // Handle null response from backend
+        setFollowers(data || []);
       }
     } catch (err) {
       console.error('Failed to fetch followers:', err);
+      setFollowers([]);
     }
   };
 
@@ -114,10 +116,12 @@ export default function Profile() {
       
       if (res.ok) {
         const data = await res.json();
-        setFollowing(data);
+        // Handle null response from backend
+        setFollowing(data || []);
       }
     } catch (err) {
       console.error('Failed to fetch following:', err);
+      setFollowing([]);
     }
   };
 

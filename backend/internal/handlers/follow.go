@@ -107,19 +107,36 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	rows, err := h.DB.Query("SELECT follower_user_id FROM follows WHERE followed_user_id = ?", sess.UserID)
+	rows, err := h.DB.Query(`
+		SELECT u.id, u.first_name, u.last_name, p.nickname 
+		FROM follows f 
+		JOIN users u ON u.id = f.follower_user_id 
+		LEFT JOIN profiles p ON p.user_id = u.id 
+		WHERE f.followed_user_id = ?`, sess.UserID)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		_ = rows.Scan(&id)
-		ids = append(ids, id)
+	type follower struct {
+		ID        string `json:"id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Nickname  string `json:"nickname"`
 	}
-	_ = json.NewEncoder(w).Encode(ids)
+	var followers []follower
+	for rows.Next() {
+		var f follower
+		var nickname sql.NullString
+		_ = rows.Scan(&f.ID, &f.FirstName, &f.LastName, &nickname)
+		f.Nickname = nickname.String
+		followers = append(followers, f)
+	}
+	// Ensure we always return an array, even if empty
+	if followers == nil {
+		followers = []follower{}
+	}
+	_ = json.NewEncoder(w).Encode(followers)
 }
 
 func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
@@ -128,17 +145,34 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	rows, err := h.DB.Query("SELECT followed_user_id FROM follows WHERE follower_user_id = ?", sess.UserID)
+	rows, err := h.DB.Query(`
+		SELECT u.id, u.first_name, u.last_name, p.nickname 
+		FROM follows f 
+		JOIN users u ON u.id = f.followed_user_id 
+		LEFT JOIN profiles p ON p.user_id = u.id 
+		WHERE f.follower_user_id = ?`, sess.UserID)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		_ = rows.Scan(&id)
-		ids = append(ids, id)
+	type followingUser struct {
+		ID        string `json:"id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Nickname  string `json:"nickname"`
 	}
-	_ = json.NewEncoder(w).Encode(ids)
+	var following []followingUser
+	for rows.Next() {
+		var f followingUser
+		var nickname sql.NullString
+		_ = rows.Scan(&f.ID, &f.FirstName, &f.LastName, &nickname)
+		f.Nickname = nickname.String
+		following = append(following, f)
+	}
+	// Ensure we always return an array, even if empty
+	if following == nil {
+		following = []followingUser{}
+	}
+	_ = json.NewEncoder(w).Encode(following)
 }

@@ -176,3 +176,65 @@ func (h *PostsHandler) ListComments(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }
+
+// Get posts by a specific user
+func (h *PostsHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if the requesting user can see posts from the target user
+	// If it's their own posts, show all. If it's someone else's, check privacy rules
+	var canView bool
+	if userID == sess.UserID {
+		canView = true
+	} else {
+		// Check if the target user is public or if the requester follows them
+		var isPublic int
+		var isFollowing int
+		_ = h.DB.QueryRow("SELECT public FROM profiles WHERE user_id = ?", userID).Scan(&isPublic)
+		_ = h.DB.QueryRow("SELECT COUNT(1) FROM follows WHERE follower_user_id = ? AND followed_user_id = ?", sess.UserID, userID).Scan(&isFollowing)
+		canView = isPublic == 1 || isFollowing > 0
+	}
+
+	if !canView {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Get posts by the user, respecting privacy rules
+	q := `
+	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at
+	FROM posts p
+	WHERE p.user_id = ?
+	AND (p.privacy = 'public' 
+		OR (p.privacy = 'followers' AND ? = 1)
+		OR p.user_id = ?)
+	ORDER BY p.created_at DESC LIMIT 100`
+
+	rows, err := h.DB.Query(q, userID, canView, sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type post struct {
+		ID, UserID, Text, Privacy string
+		CreatedAt                 string
+	}
+	var out []post
+	for rows.Next() {
+		var p post
+		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt)
+		out = append(out, p)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}

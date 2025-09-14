@@ -1,6 +1,18 @@
-import { createContext, useContext, useState, useRef } from "react";
+import { createContext, useState, useRef } from "react";
 
 const UserContext = createContext();
+
+function normalizeUser(u) {
+  if (!u) return null;
+  // ensure `id` exists regardless of backend casing
+  return {
+    id: u.id || u.ID || u.Id || null,
+    email: u.email || u.Email || null,
+    first_name: u.first_name || u.FirstName || null,
+    last_name: u.last_name || u.LastName || null,
+    ...u,
+  };
+}
 
 export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -8,13 +20,13 @@ export function UserProvider({ children }) {
   const logoutCalledRef = useRef(false);
 
   const login = (userData) => {
-    setUser(userData);
-    setIsAuthenticated(true);
+    const n = normalizeUser(userData);
+    setUser(n);
+    setIsAuthenticated(!!n && !!n.id);
     logoutCalledRef.current = false;
   };
 
   const logout = async () => {
-    // guard against multiple calls (StrictMode or remounts)
     if (logoutCalledRef.current) return;
     logoutCalledRef.current = true;
     try {
@@ -22,7 +34,7 @@ export function UserProvider({ children }) {
         method: "POST",
         credentials: "include",
       });
-    } catch (e) {
+    } catch {
       // ignore network errors here
     }
     setUser(null);
@@ -36,6 +48,4 @@ export function UserProvider({ children }) {
   );
 }
 
-export function useUser() {
-  return useContext(UserContext);
-}
+export { UserContext };

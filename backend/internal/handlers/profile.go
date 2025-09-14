@@ -25,26 +25,51 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	userID := chi.URLParam(r, "id")
 	var public int
-	var nickname, about sql.NullString
-	if err := h.DB.QueryRow("SELECT public, nickname, about FROM profiles WHERE user_id = ?", userID).Scan(&public, &nickname, &about); err != nil {
+	var nickname, about, avatar sql.NullString
+	var first, last, email sql.NullString
+	var dob sql.NullString
+	if err := h.DB.QueryRow(`SELECT p.public, p.nickname, p.about, p.avatar_path, u.first_name, u.last_name, u.email, u.date_of_birth
+		FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ?`, userID).Scan(&public, &nickname, &about, &avatar, &first, &last, &email, &dob); err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
+	// if profile is private and viewer is not owner, ensure viewer follows the user
+	isFollowing := 0
 	if public == 0 && viewerID != userID {
-		// check follow relation
-		var cnt int
-		_ = h.DB.QueryRow("SELECT COUNT(1) FROM follows WHERE follower_user_id = ? AND followed_user_id = ?", viewerID, userID).Scan(&cnt)
-		if cnt == 0 {
+		_ = h.DB.QueryRow("SELECT COUNT(1) FROM follows WHERE follower_user_id = ? AND followed_user_id = ?", viewerID, userID).Scan(&isFollowing)
+		if isFollowing == 0 {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
+	} else if viewerID != "" {
+		// set isFollowing for viewer
+		_ = h.DB.QueryRow("SELECT COUNT(1) FROM follows WHERE follower_user_id = ? AND followed_user_id = ?", viewerID, userID).Scan(&isFollowing)
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"user_id":  userID,
-		"public":   public == 1,
-		"nickname": nickname.String,
-		"about":    about.String,
-	})
+
+	// follower / following counts
+	var followersCount, followingCount int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM follows WHERE followed_user_id = ?", userID).Scan(&followersCount)
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM follows WHERE follower_user_id = ?", userID).Scan(&followingCount)
+
+	out := map[string]any{
+		"user_id":         userID,
+		"public":          public == 1,
+		"nickname":        nickname.String,
+		"about":           about.String,
+		"avatar_path":     avatar.String,
+		"first_name":      first.String,
+		"last_name":       last.String,
+		"followers_count": followersCount,
+		"following_count": followingCount,
+		"is_following":    isFollowing == 1,
+	}
+	// only include sensitive fields for the profile owner
+	if viewerID == userID {
+		out["email"] = email.String
+		out["date_of_birth"] = dob.String
+	}
+
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (h *ProfileHandler) TogglePrivacy(w http.ResponseWriter, r *http.Request) {

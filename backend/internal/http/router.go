@@ -20,6 +20,9 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	// Attach session to context when present (optional): useful for public endpoints
+	r.Use(auth.LoadSession(db))
+
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))

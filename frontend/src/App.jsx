@@ -9,8 +9,10 @@ import {
 import Login from "./components/Login";
 import Register from "./components/Register";
 import LogoutMessage from "./components/Logout";
-import { UserProvider, useUser } from "./context/UserContext";
+import { UserProvider } from "./context/UserContext";
+import { useUser } from "./context/useUser";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Profile from "./components/Profile";
 import "./App.css";
 
 function App() {
@@ -22,7 +24,7 @@ function App() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, login, logout } = useUser();
+  const { isAuthenticated, login, logout, user } = useUser();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,6 +58,11 @@ function AppRoutes() {
         <Link to="/register">
           <button>Register</button>
         </Link>
+        {isAuthenticated && user && (
+          <Link to={`/profile/${user.id}`}>
+            <button style={{ marginLeft: "1rem" }}>My Profile</button>
+          </Link>
+        )}
         {isAuthenticated && (
           <Link to="/logout">
             <button style={{ marginLeft: "1rem" }}>Logout</button>
@@ -83,6 +90,7 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route path="/profile/:id" element={<Profile />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

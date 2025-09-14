@@ -116,3 +116,22 @@ func ClearSessionCookie(w http.ResponseWriter) {
 }
 
 var ErrUnauthorized = errors.New("unauthorized")
+
+// LoadSession is middleware that tries to load a session from the request cookie
+// and attaches it to the request context if valid. Use this for routes that
+// need to know the current viewer but aren't strictly protected.
+func LoadSession(db *sql.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie(SessionCookieName)
+			if err == nil && cookie.Value != "" {
+				sess, err := GetSession(db, cookie.Value)
+				if err == nil && sess.ExpiresAt.After(time.Now()) {
+					next.ServeHTTP(w, WithSession(r, sess))
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

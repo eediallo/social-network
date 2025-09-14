@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useUser } from "../context/UserContext";
+import { useUser } from "../context/useUser";
 
 export default function Register() {
   const [email, setEmail] = useState("");

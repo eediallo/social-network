@@ -94,3 +94,27 @@ func (h *ProfileHandler) TogglePrivacy(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"public": body.Public})
 }
+
+type profileUpdate struct {
+	Nickname string `json:"nickname"`
+	About    string `json:"about"`
+}
+
+func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	var body profileUpdate
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	_, err := h.DB.Exec("UPDATE profiles SET nickname = ?, about = ? WHERE user_id = ?", body.Nickname, body.About, sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}

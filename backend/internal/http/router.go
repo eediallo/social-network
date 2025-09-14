@@ -63,6 +63,7 @@ func NewRouter(db *sql.DB) http.Handler {
 	profileHandler := &handlers.ProfileHandler{DB: db}
 	r.Get("/api/users/{id}/profile", profileHandler.GetProfile)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Patch("/api/me/profile/privacy", profileHandler.TogglePrivacy)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Patch("/api/me/profile", profileHandler.UpdateProfile)
 
 	// WebSocket
 	wsHub := ws.NewHub()

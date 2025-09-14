@@ -151,7 +151,9 @@ export default function Profile() {
               <div>
                 <strong>Date of birth:</strong> {profile.date_of_birth}
               </div>
-              <button style={{ marginTop: 8 }}>Edit profile</button>
+              <a href="/me/edit">
+                <button style={{ marginTop: 8 }}>Edit profile</button>
+              </a>
             </div>
           )}
         </div>

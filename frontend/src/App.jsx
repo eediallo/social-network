@@ -13,6 +13,7 @@ import { UserProvider } from "./context/UserContext";
 import { useUser } from "./context/useUser";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Profile from "./components/Profile";
+import EditProfile from "./components/EditProfile";
 import "./App.css";
 
 function App() {
@@ -91,6 +92,7 @@ function AppRoutes() {
           }
         />
         <Route path="/profile/:id" element={<Profile />} />
+        <Route path="/me/edit" element={<EditProfile />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

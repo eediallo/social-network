@@ -57,8 +57,9 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	}
 	// public posts OR posts from users the requester follows (for followers privacy) OR selected where allowed includes requester
 	q := `
-	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at
+	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at, u.first_name, u.last_name
 	FROM posts p
+	JOIN users u ON u.id = p.user_id
 	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
 	LEFT JOIN post_allowed_followers paf ON paf.post_id = p.id AND paf.follower_user_id = ?
 	WHERE p.privacy = 'public'
@@ -74,12 +75,61 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	type post struct {
 		ID, UserID, Text, Privacy string
 		CreatedAt                 string
+		FirstName                 string `json:"FirstName"`
+		LastName                  string `json:"LastName"`
 	}
 	var out []post
 	for rows.Next() {
 		var p post
-		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt)
+		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt, &p.FirstName, &p.LastName)
 		out = append(out, p)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// Get images for a post
+func (h *PostsHandler) GetPostImages(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	postID := r.URL.Query().Get("post_id")
+	if postID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user can see this post (reuse visibility logic)
+	visibleQ := `SELECT COUNT(1)
+	FROM posts p
+	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
+	LEFT JOIN post_allowed_followers paf ON paf.post_id = p.id AND paf.follower_user_id = ?
+	WHERE p.id = ? AND (p.privacy='public' OR (p.privacy='followers' AND f.follower_user_id IS NOT NULL) OR (p.privacy='selected' AND paf.follower_user_id IS NOT NULL))`
+	var cnt int
+	_ = h.DB.QueryRow(visibleQ, sess.UserID, sess.UserID, postID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	rows, err := h.DB.Query("SELECT id, path, mime FROM post_images WHERE post_id = ? ORDER BY created_at ASC", postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type image struct {
+		ID   string `json:"id"`
+		Path string `json:"path"`
+		Mime string `json:"mime"`
+	}
+	var out []image
+	for rows.Next() {
+		var img image
+		_ = rows.Scan(&img.ID, &img.Path, &img.Mime)
+		out = append(out, img)
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }

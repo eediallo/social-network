@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 
 	"social-network/backend/internal/auth"
+
+	"github.com/google/uuid"
 )
 
 type ImagesHandler struct {
@@ -96,8 +98,9 @@ func (h *ImagesHandler) UploadPostImage(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	// Optionally update DB with image path
-	_, _ = h.DB.Exec("INSERT INTO post_images(post_id, filename) VALUES(?, ?)", postID, filename)
+	// Update DB with image path and mime type
+	_, _ = h.DB.Exec("INSERT INTO post_images(id, post_id, path, mime) VALUES(?, ?, ?, ?)",
+		uuid.NewString(), postID, filename, handler.Header.Get("Content-Type"))
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(filename))
 }

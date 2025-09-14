@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { formatRelativeTime, isValidDate } from '../utils/dateUtils';
+import { getInitials } from '../utils/avatarUtils';
 
 export default function Post({ post }) {
   const [comments, setComments] = useState([]);
@@ -79,21 +81,15 @@ export default function Post({ post }) {
   };
 
   const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-    
-    if (diff < 60000) return 'Just now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return date.toLocaleDateString();
+    if (!isValidDate(timestamp)) return 'Invalid Date';
+    return formatRelativeTime(timestamp);
   };
 
   return (
     <div className="post">
       <div className="post-header">
         <div className="post-avatar">
-          {post.first_name?.[0]?.toUpperCase() || '?'}
+          {getInitials(post.first_name, post.last_name) || '?'}
         </div>
         <div className="post-author">
           <Link
@@ -103,7 +99,9 @@ export default function Post({ post }) {
             {post.first_name} {post.last_name}
           </Link>
           <div className="post-meta">
-            {formatTime(post.created_at)} • {getPrivacyIcon(post.privacy)} {post.privacy}
+            <span>{formatTime(post.created_at)}</span>
+            <span className="privacy-icon">{getPrivacyIcon(post.privacy)}</span>
+            <span className="privacy-text">{post.privacy}</span>
           </div>
         </div>
       </div>
@@ -117,21 +115,21 @@ export default function Post({ post }) {
           onClick={handleLike}
           className={`post-action ${isLiked ? 'active' : ''}`}
         >
-          <span>{isLiked ? '❤️' : '🤍'}</span>
-          <span>{likes}</span>
+          <span className="icon">{isLiked ? '❤️' : '🤍'}</span>
+          <span className="count">{likes}</span>
         </button>
         
         <button
           onClick={toggleComments}
           className="post-action"
         >
-          <span>💬</span>
-          <span>{comments.length}</span>
+          <span className="icon">💬</span>
+          <span className="count">{comments.length}</span>
         </button>
         
         <button className="post-action">
-          <span>🔄</span>
-          <span>Share</span>
+          <span className="icon">🔄</span>
+          <span className="count">Share</span>
         </button>
       </div>
       

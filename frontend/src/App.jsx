@@ -6,6 +6,7 @@ import {
   Link,
   Navigate,
 } from "react-router-dom";
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Logout from "./pages/Logout";
@@ -53,7 +54,7 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="d-flex justify-center align-center" style={{ height: '100vh' }}>
+      <div className="loading-container">
         <div className="loading"></div>
       </div>
     );
@@ -61,10 +62,20 @@ function AppRoutes() {
 
   return (
     <Router>
-      <div className="d-flex flex-column" style={{ minHeight: '100vh' }}>
+      <div className="app-container">
         {isAuthenticated && <Navbar />}
         <main className="flex-1">
           <Routes>
+            <Route 
+              path="/" 
+              element={
+                isAuthenticated ? (
+                  <Navigate to="/feed" />
+                ) : (
+                  <Landing />
+                )
+              } 
+            />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route
@@ -73,12 +84,12 @@ function AppRoutes() {
                 isAuthenticated ? (
                   <Logout />
                 ) : (
-                  <Navigate to="/login" />
+                  <Navigate to="/" />
                 )
               }
             />
             <Route
-              path="/"
+              path="/feed"
               element={
                 <ProtectedRoute>
                   <Feed />

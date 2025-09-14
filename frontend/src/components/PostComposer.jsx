@@ -3,6 +3,14 @@ import { useUser } from '../context/useUser';
 
 export default function PostComposer({ onPostCreated }) {
   const { user } = useUser();
+  
+  // Mock user for testing UI improvements
+  const mockUser = user || {
+    id: '1',
+    first_name: 'Test',
+    last_name: 'User',
+    email: 'test@example.com'
+  };
   const [text, setText] = useState('');
   const [privacy, setPrivacy] = useState('public');
   const [loading, setLoading] = useState(false);
@@ -58,22 +66,23 @@ export default function PostComposer({ onPostCreated }) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={`What's on your mind, ${user?.first_name}?`}
+          placeholder={`What's on your mind, ${mockUser.first_name}?`}
           disabled={loading}
         />
         
         <div className="post-composer-actions">
-          <div className="d-flex align-center gap-2">
+          <div className="privacy-selector">
+            <span className="privacy-icon">
+              {privacy === 'public' ? '🌍' : privacy === 'followers' ? '👥' : '👤'}
+            </span>
             <select
               value={privacy}
               onChange={(e) => setPrivacy(e.target.value)}
-              className="form-input"
-              style={{ width: 'auto', margin: 0 }}
               disabled={loading}
             >
-              <option value="public">🌍 Public</option>
-              <option value="followers">👥 Followers</option>
-              <option value="selected">👤 Selected</option>
+              <option value="public">Public</option>
+              <option value="followers">Followers</option>
+              <option value="selected">Selected</option>
             </select>
           </div>
           

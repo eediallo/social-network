@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useUser } from '../context/useUser';
+import { getInitials, getAvatarUrl } from '../utils/avatarUtils';
 
 export default function Profile() {
   const { id } = useParams();
@@ -130,13 +131,13 @@ export default function Profile() {
         <div className="profile-avatar">
           {profile.avatar_path ? (
             <img 
-              src={`/images/${profile.avatar_path}`} 
-              alt={profile.first_name}
+              src={getAvatarUrl(profile.avatar_path)} 
+              alt={`${profile.first_name} ${profile.last_name}`}
               className="w-full h-full"
               style={{ borderRadius: '50%', objectFit: 'cover' }}
             />
           ) : (
-            profile.first_name?.[0]?.toUpperCase() || '?'
+            getInitials(profile.first_name, profile.last_name) || '?'
           )}
         </div>
         

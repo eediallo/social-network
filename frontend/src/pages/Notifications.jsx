@@ -4,6 +4,27 @@ import { formatRelativeTime } from '../utils/dateUtils';
 export default function Notifications() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const getNotificationMessage = (type, actorId) => {
+    switch (type) {
+      case 'comment':
+        return 'commented on your post';
+      case 'follow_request':
+        return 'sent you a follow request';
+      case 'follow_accepted':
+        return 'accepted your follow request';
+      case 'group_invite':
+        return 'invited you to a group';
+      case 'group_request':
+        return 'requested to join your group';
+      case 'group_accepted':
+        return 'accepted your group join request';
+      case 'event_invite':
+        return 'invited you to an event';
+      default:
+        return 'interacted with your content';
+    }
+  };
   const [error, setError] = useState('');
 
   // Mock data for testing UI
@@ -59,7 +80,24 @@ export default function Notifications() {
       const res = await fetch('/api/notifications', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data);
+        // Handle null response or empty array
+        if (data === null || !Array.isArray(data)) {
+          console.log('No notifications found, using mock data for UI testing');
+          setNotifications(mockNotifications);
+        } else {
+          // Map backend data to frontend format
+          const mappedNotifications = data.map(notification => ({
+            id: notification.ID,
+            user_id: notification.ActorID, // ActorID is the user who triggered the notification
+            type: notification.Type,
+            message: getNotificationMessage(notification.Type, notification.ActorID),
+            created_at: notification.CreatedAt,
+            read: notification.ReadAt !== '', // ReadAt is empty string if not read
+            first_name: 'User', // Default values since backend doesn't return user info
+            last_name: notification.ActorID ? notification.ActorID.substring(0, 8) : 'Unknown'
+          }));
+          setNotifications(mappedNotifications);
+        }
       } else {
         // Use mock data for testing UI
         console.log('Using mock notifications data for UI testing');
@@ -84,10 +122,12 @@ export default function Notifications() {
         setNotifications(prev => 
           prev.map(notif => 
             notif.id === notificationId 
-              ? { ...notif, read_at: new Date().toISOString() }
+              ? { ...notif, read: true }
               : notif
           )
         );
+      } else {
+        console.error('Failed to mark notification as read:', res.status);
       }
     } catch (err) {
       console.error('Failed to mark notification as read:', err);

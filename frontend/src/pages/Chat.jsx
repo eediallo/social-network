@@ -7,8 +7,8 @@ export default function Chat() {
   const { user } = useUser();
   const [ws, setWs] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [currentChat, setCurrentChat] = useState(null);
-  const [chatType, setChatType] = useState('direct'); // 'direct' or 'group'
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
   const [messageText, setMessageText] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,45 +76,16 @@ export default function Chat() {
   ];
 
   useEffect(() => {
-    // Use mock data for UI testing
-    setMessages(mockMessages);
-    setLoading(false);
+    console.log('Chat useEffect running');
+    fetchConversations();
+    // Initialize WebSocket with error handling
+    try {
+      initializeWebSocket();
+    } catch (err) {
+      console.error('WebSocket initialization error:', err);
+      setError('Failed to initialize chat connection');
+    }
     
-    // Initialize WebSocket connection (commented out for UI testing)
-    /*
-    const connectWebSocket = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-      
-      const newWs = new WebSocket(wsUrl);
-      
-      newWs.onopen = () => {
-        console.log('WebSocket connected');
-        setWs(newWs);
-        setLoading(false);
-      };
-      
-      newWs.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        setMessages(prev => [...prev, message]);
-      };
-      
-      newWs.onclose = () => {
-        console.log('WebSocket disconnected');
-        setWs(null);
-        // Attempt to reconnect after 3 seconds
-        setTimeout(connectWebSocket, 3000);
-      };
-      
-      newWs.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        setError('Connection error');
-      };
-    };
-
-    connectWebSocket();
-    */
-
     return () => {
       if (ws) {
         ws.close();
@@ -122,20 +93,155 @@ export default function Chat() {
     };
   }, []);
 
+  const fetchConversations = async () => {
+    console.log('fetchConversations called');
+    try {
+      // For now, we'll use a hardcoded list of known users from our testing
+      // In a real app, you'd have a dedicated endpoint for conversations
+      const knownUsers = [
+        { id: 'f4b25689-70b8-4932-8605-30fabbffb35c', name: 'Commenter User' },
+        { id: '02360d70-a9ad-4e74-ac5d-c5733b4619eb', name: 'Test User 2' },
+        { id: '784807ef-c60a-4267-8fa7-00675d6339e5', name: 'Test User 3' }
+      ];
+      
+      const conversations = knownUsers.map(user => ({
+        id: user.id,
+        name: user.name,
+        lastMessage: '',
+        timestamp: new Date().toISOString(),
+        unread: 0,
+        type: 'direct'
+      }));
+      console.log('Setting conversations:', conversations);
+      setConversations(conversations);
+      console.log('Conversations set successfully');
+    } catch (err) {
+      console.log('Error fetching conversations, using mock data:', err);
+      setConversations(mockConversations);
+    } finally {
+      console.log('Setting loading to false');
+      setLoading(false);
+    }
+  };
+
+  const initializeWebSocket = () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    console.log('Attempting to connect to WebSocket:', wsUrl);
+    
+    try {
+      const newWs = new WebSocket(wsUrl);
+      
+      newWs.onopen = () => {
+        console.log('WebSocket connected successfully');
+        setWs(newWs);
+        setError(''); // Clear any previous errors
+      };
+      
+      newWs.onmessage = (event) => {
+        console.log('WebSocket message received:', event.data);
+        try {
+          const message = JSON.parse(event.data);
+          setMessages(prev => [...prev, message]);
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err);
+        }
+      };
+      
+      newWs.onclose = (event) => {
+        console.log('WebSocket disconnected:', event.code, event.reason);
+        setWs(null);
+        // Only attempt to reconnect if it wasn't a normal closure
+        if (event.code !== 1000) {
+          setTimeout(initializeWebSocket, 3000);
+        }
+      };
+      
+      newWs.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setError('Chat connection error - messages will not be sent in real-time');
+      };
+    } catch (err) {
+      console.error('Failed to create WebSocket:', err);
+      setError('Failed to initialize chat connection');
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (selectedConversation) {
+      loadMessages();
+    }
+  }, [selectedConversation]);
+
+  const loadMessages = async () => {
+    if (!selectedConversation) return;
+    
+    try {
+      if (selectedConversation.type === 'direct') {
+        const res = await fetch(`/api/messages/direct?user_id=${selectedConversation.id}`, {
+          credentials: 'include'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data)) {
+            // Map backend data to frontend format
+            const mappedMessages = data.map(msg => ({
+              id: msg.id,
+              text: msg.text,
+              user_id: msg.from_user_id,
+              created_at: msg.created_at,
+              type: 'direct',
+              first_name: 'User', // Default values since backend doesn't return user info
+              last_name: msg.from_user_id ? msg.from_user_id.substring(0, 8) : 'Unknown'
+            }));
+            setMessages(mappedMessages);
+          } else {
+            setMessages([]);
+          }
+        }
+      } else if (selectedConversation.type === 'group') {
+        const res = await fetch(`/api/messages/group?group_id=${selectedConversation.id}`, {
+          credentials: 'include'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data)) {
+            // Map backend data to frontend format
+            const mappedMessages = data.map(msg => ({
+              id: msg.id,
+              text: msg.text,
+              user_id: msg.from_user_id,
+              created_at: msg.created_at,
+              type: 'group',
+              first_name: 'User', // Default values since backend doesn't return user info
+              last_name: msg.from_user_id ? msg.from_user_id.substring(0, 8) : 'Unknown'
+            }));
+            setMessages(mappedMessages);
+          } else {
+            setMessages([]);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load messages:', err);
+      setMessages([]);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const sendMessage = () => {
-    if (!ws || !messageText.trim() || !currentChat) return;
+    if (!ws || !messageText.trim() || !selectedConversation) return;
 
     const message = {
-      type: chatType,
-      to: currentChat.id,
+      type: selectedConversation.type,
+      to: selectedConversation.id,
       text: messageText.trim()
     };
 
@@ -150,16 +256,8 @@ export default function Chat() {
     }
   };
 
-  const startDirectChat = (conversation) => {
-    setCurrentChat(conversation);
-    setChatType('direct');
-    setMessages(mockMessages);
-  };
-
-  const startGroupChat = (conversation) => {
-    setCurrentChat(conversation);
-    setChatType('group');
-    setMessages(mockMessages);
+  const selectConversation = (conversation) => {
+    setSelectedConversation(conversation);
   };
 
   if (loading) {
@@ -167,6 +265,8 @@ export default function Chat() {
       <div className="container">
         <div className="text-center mt-5">
           <div className="loading"></div>
+          <p>Loading conversations...</p>
+          <p>Debug: Loading state is true</p>
         </div>
       </div>
     );
@@ -191,6 +291,29 @@ export default function Chat() {
     );
   }
 
+  console.log('Chat render - loading:', loading, 'conversations:', conversations.length, 'selectedConversation:', selectedConversation);
+
+  // Fallback to ensure something always renders
+  if (conversations.length === 0 && !loading) {
+    return (
+      <div className="container">
+        <h1 className="mb-4">Chat</h1>
+        <div className="card">
+          <div className="card-body text-center">
+            <h3>No Conversations</h3>
+            <p>No conversations found. This might be a temporary issue.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="btn btn-primary"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <h1 className="mb-4">Chat</h1>
@@ -201,37 +324,44 @@ export default function Chat() {
             <h3 className="chat-sidebar-title">Conversations</h3>
           </div>
           <div className="chat-list">
-            {mockConversations.map((conversation) => (
-              <div 
-                key={conversation.id} 
-                className={`chat-item ${currentChat?.id === conversation.id ? 'active' : ''}`}
-                onClick={() => conversation.type === 'direct' ? startDirectChat(conversation) : startGroupChat(conversation)}
-              >
-                <div className="chat-avatar">
-                  {getInitials(conversation.user.first_name, conversation.user.last_name)}
-                </div>
-                <div className="chat-info">
-                  <div className="chat-name">{conversation.name}</div>
-                  <div className="chat-preview">{conversation.lastMessage}</div>
-                  <div className="chat-time">{formatRelativeTime(conversation.lastMessageTime)}</div>
-                </div>
-                {conversation.unreadCount > 0 && (
-                  <div className="chat-unread">{conversation.unreadCount}</div>
-                )}
+            {conversations.length === 0 ? (
+              <div className="text-center p-4">
+                <p>No conversations found</p>
+                <p>Conversations: {conversations.length}</p>
               </div>
-            ))}
+            ) : (
+              conversations.map((conversation) => (
+                <div 
+                  key={conversation.id} 
+                  className={`chat-item ${selectedConversation?.id === conversation.id ? 'active' : ''}`}
+                  onClick={() => selectConversation(conversation)}
+                >
+                  <div className="chat-avatar">
+                    {getInitials(conversation.name.split(' ')[0], conversation.name.split(' ')[1] || '')}
+                  </div>
+                  <div className="chat-info">
+                    <div className="chat-name">{conversation.name}</div>
+                    <div className="chat-preview">{conversation.lastMessage || 'No messages yet'}</div>
+                    <div className="chat-time">{formatRelativeTime(conversation.timestamp)}</div>
+                  </div>
+                  {conversation.unread > 0 && (
+                    <div className="chat-unread">{conversation.unread}</div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
         
         <div className="chat-main">
-          {currentChat ? (
+          {selectedConversation ? (
             <>
               <div className="chat-header">
-                <div className="chat-avatar">{currentChat.name[0]}</div>
+                <div className="chat-avatar">{selectedConversation.name[0]}</div>
                 <div>
-                  <div className="chat-name">{currentChat.name}</div>
+                  <div className="chat-name">{selectedConversation.name}</div>
                   <div className="text-muted">
-                    {chatType === 'direct' ? 'Direct Message' : 'Group Chat'}
+                    {selectedConversation.type === 'direct' ? 'Direct Message' : 'Group Chat'}
                   </div>
                 </div>
               </div>
@@ -241,7 +371,7 @@ export default function Chat() {
                   <div
                     key={index}
                     className={`chat-message ${
-                      message.user_id === user?.id ? 'own' : ''
+                      message.user_id === 'current_user' ? 'own' : ''
                     }`}
                   >
                     <div className="chat-message-avatar">
@@ -261,7 +391,7 @@ export default function Chat() {
               <div className="chat-input">
                 <input
                   type="text"
-                  placeholder={`Message ${currentChat.name}...`}
+                  placeholder={`Message ${selectedConversation.name}...`}
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   onKeyPress={handleKeyPress}

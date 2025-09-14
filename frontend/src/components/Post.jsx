@@ -17,25 +17,28 @@ export default function Post({ post }) {
 
     setCommentLoading(true);
     try {
-      const res = await fetch('/api/comments', {
+      const res = await fetch(`/api/comments?post_id=${post.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: newComment.trim(),
-          post_id: post.id
+          text: newComment.trim()
         }),
         credentials: 'include'
       });
 
       if (res.ok) {
         const comment = await res.json();
-        setComments(prev => [...prev, {
+        // Add the new comment to the list
+        const newCommentData = {
           id: comment.id,
           text: newComment.trim(),
           user_id: 'current_user', // In real app, get from context
           created_at: new Date().toISOString()
-        }]);
+        };
+        setComments(prev => [...prev, newCommentData]);
         setNewComment('');
+      } else {
+        console.error('Failed to add comment:', res.status);
       }
     } catch (err) {
       console.error('Failed to add comment:', err);
@@ -57,7 +60,19 @@ export default function Post({ post }) {
       
       if (res.ok) {
         const data = await res.json();
-        setComments(data);
+        // Handle null response or map backend data
+        if (data === null || !Array.isArray(data)) {
+          setComments([]);
+        } else {
+          // Map backend data to frontend format
+          const mappedComments = data.map(comment => ({
+            id: comment.id,
+            text: comment.text,
+            user_id: comment.user_id,
+            created_at: comment.created_at
+          }));
+          setComments(mappedComments);
+        }
       }
     } catch (err) {
       console.error('Failed to load comments:', err);

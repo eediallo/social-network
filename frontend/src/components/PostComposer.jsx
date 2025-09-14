@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUser } from '../context/useUser';
+import ImageUpload from './ImageUpload';
 
 export default function PostComposer({ onPostCreated }) {
   const { user } = useUser();
@@ -13,17 +14,37 @@ export default function PostComposer({ onPostCreated }) {
   };
   const [text, setText] = useState('');
   const [privacy, setPrivacy] = useState('public');
+  const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const uploadImage = async (image, postId) => {
+    const formData = new FormData();
+    formData.append('image', image.file);
+    formData.append('post_id', postId);
+
+    const res = await fetch('/api/images/post', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to upload image');
+    }
+
+    return await res.text(); // Returns filename
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() && images.length === 0) return;
 
     setLoading(true);
     setError('');
 
     try {
+      // First create the post
       const res = await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -36,6 +57,19 @@ export default function PostComposer({ onPostCreated }) {
 
       if (res.ok) {
         const newPost = await res.json();
+        
+        // Upload images if any
+        if (images.length > 0) {
+          try {
+            await Promise.all(
+              images.map(image => uploadImage(image, newPost.id))
+            );
+          } catch (imgError) {
+            console.error('Image upload failed:', imgError);
+            // Continue even if image upload fails
+          }
+        }
+
         // Create a mock post object for the feed
         const post = {
           id: newPost.id,
@@ -44,11 +78,17 @@ export default function PostComposer({ onPostCreated }) {
           privacy: privacy,
           created_at: new Date().toISOString(),
           first_name: user.first_name,
-          last_name: user.last_name
+          last_name: user.last_name,
+          images: images.map(img => ({
+            id: img.id,
+            filename: img.file.name,
+            preview: img.preview
+          }))
         };
         
         onPostCreated(post);
         setText('');
+        setImages([]);
       } else {
         const errorText = await res.text();
         setError(errorText || 'Failed to create post');
@@ -67,6 +107,12 @@ export default function PostComposer({ onPostCreated }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={`What's on your mind, ${mockUser.first_name}?`}
+          disabled={loading}
+        />
+        
+        <ImageUpload
+          onImagesChange={setImages}
+          maxImages={4}
           disabled={loading}
         />
         

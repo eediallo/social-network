@@ -53,6 +53,7 @@ export default function Feed() {
       const res = await fetch('/api/feed', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
+        console.log('Backend feed data:', data);
         // Map backend data to frontend format
         const mappedPosts = data.map(post => ({
           id: post.ID,
@@ -60,19 +61,21 @@ export default function Feed() {
           text: post.Text,
           privacy: post.Privacy,
           created_at: post.CreatedAt,
-          first_name: 'User', // Default values since backend doesn't return user info
-          last_name: post.UserID.substring(0, 8),
+          first_name: post.FirstName || 'User',
+          last_name: post.LastName || post.UserID.substring(0, 8),
           likes: 0,
           comments: 0
         }));
+        console.log('Mapped posts:', mappedPosts);
         setPosts(mappedPosts);
       } else {
+        console.log('Backend feed failed, status:', res.status);
         // Use mock data for testing UI improvements
         console.log('Using mock data for UI testing');
         setPosts(mockPosts);
       }
     } catch (err) {
-      console.log('Network error, using mock data for UI testing');
+      console.log('Network error, using mock data for UI testing:', err);
       setPosts(mockPosts);
     } finally {
       setLoading(false);

@@ -10,6 +10,11 @@ export default function Post({ post }) {
   const [commentLoading, setCommentLoading] = useState(false);
   const [likes, setLikes] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
+  const [images, setImages] = useState([]);
+  const [imagesLoading, setImagesLoading] = useState(false);
+
+  // Debug logging
+  console.log('Post component rendered with post:', post);
 
   const handleAddComment = async (e) => {
     e.preventDefault();
@@ -79,6 +84,50 @@ export default function Post({ post }) {
     }
   };
 
+  const loadImages = async () => {
+    setImagesLoading(true);
+    try {
+      console.log('Loading images for post:', post.id);
+      const url = `/api/posts/images?post_id=${post.id}`;
+      console.log('Requesting URL:', url);
+      
+      const res = await fetch(url, {
+        credentials: 'include'
+      });
+      
+      console.log('Response status:', res.status);
+      console.log('Response headers:', res.headers);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Images data received:', data);
+        if (data && Array.isArray(data)) {
+          console.log('Setting images:', data);
+          setImages(data);
+        } else {
+          console.log('No images data, setting empty array');
+          setImages([]);
+        }
+      } else {
+        console.error('Failed to load images, status:', res.status);
+        const errorText = await res.text();
+        console.error('Error response:', errorText);
+        setImages([]);
+      }
+    } catch (err) {
+      console.error('Failed to load images:', err);
+      setImages([]);
+    } finally {
+      setImagesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Load images when component mounts
+    console.log('Post component useEffect triggered for post ID:', post.id);
+    loadImages();
+  }, [post.id]);
+
   const toggleComments = () => {
     if (!showComments && comments.length === 0) {
       loadComments();
@@ -123,6 +172,53 @@ export default function Post({ post }) {
       
       <div className="post-content">
         <div className="post-text">{post.text}</div>
+        
+        {imagesLoading && (
+          <div className="post-images-loading">
+            <div className="loading"></div>
+          </div>
+        )}
+        
+        {images.length > 0 ? (
+          <div className="post-images">
+            {console.log('Rendering images:', images)}
+            {images.map((image, index) => {
+              const imageUrl = `/images/${image.path}`;
+              console.log('Image URL:', imageUrl);
+              return (
+                <img
+                  key={image.id}
+                  src={imageUrl}
+                  alt={`Post image ${index + 1}`}
+                  className="post-image"
+                  loading="lazy"
+                  onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+                  onError={(e) => console.error('Image failed to load:', imageUrl, e)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <div>
+            {console.log('No images to render, images array:', images)}
+            {imagesLoading && <div>Loading images...</div>}
+          </div>
+        )}
+        
+        {/* Fallback for images passed directly in post object (from PostComposer) */}
+        {post.images && post.images.length > 0 && (
+          <div className="post-images">
+            {post.images.map((image, index) => (
+              <img
+                key={image.id}
+                src={image.preview}
+                alt={`Post image ${index + 1}`}
+                className="post-image"
+                loading="lazy"
+              />
+            ))}
+          </div>
+        )}
       </div>
       
       <div className="post-actions">

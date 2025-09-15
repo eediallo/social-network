@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { formatRelativeTime } from '../utils/dateUtils';
 
 export default function Notifications() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,6 +28,42 @@ export default function Notifications() {
     }
   };
   const [error, setError] = useState('');
+
+  const handleNotificationClick = async (notification) => {
+    try {
+      // Mark notification as read
+      if (!notification.read_at) {
+        await fetch(`/api/notifications/mark-read?id=${notification.id}`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+      }
+
+      // Navigate to the appropriate page
+      if (notification.action_url) {
+        navigate(notification.action_url);
+      }
+    } catch (err) {
+      console.error('Error handling notification click:', err);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      const unreadNotifications = notifications.filter(n => !n.read_at);
+      await Promise.all(
+        unreadNotifications.map(notification =>
+          fetch(`/api/notifications/mark-read?id=${notification.id}`, {
+            method: 'POST',
+            credentials: 'include'
+          })
+        )
+      );
+      fetchNotifications(); // Refresh the list
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+    }
+  };
 
   // Mock data for testing UI
   const mockNotifications = [
@@ -85,18 +123,9 @@ export default function Notifications() {
           console.log('No notifications found, using mock data for UI testing');
           setNotifications(mockNotifications);
         } else {
-          // Map backend data to frontend format
-          const mappedNotifications = data.map(notification => ({
-            id: notification.ID,
-            user_id: notification.ActorID, // ActorID is the user who triggered the notification
-            type: notification.Type,
-            message: getNotificationMessage(notification.Type, notification.ActorID),
-            created_at: notification.CreatedAt,
-            read: notification.ReadAt !== '', // ReadAt is empty string if not read
-            first_name: 'User', // Default values since backend doesn't return user info
-            last_name: notification.ActorID ? notification.ActorID.substring(0, 8) : 'Unknown'
-          }));
-          setNotifications(mappedNotifications);
+          // Use the enhanced notification data directly from backend
+          console.log('Raw notifications data:', data);
+          setNotifications(data);
         }
       } else {
         // Use mock data for testing UI
@@ -216,8 +245,8 @@ export default function Notifications() {
         {notifications.map((notification) => (
           <div
             key={notification.id}
-            className={`notification ${!notification.read_at ? 'unread' : ''}`}
-            onClick={() => !notification.read_at && markAsRead(notification.id)}
+            className={`notification ${!notification.read_at ? 'unread' : ''} ${notification.action_url ? 'clickable' : ''}`}
+            onClick={() => handleNotificationClick(notification)}
           >
             <div className="notification-avatar">
               {getNotificationIcon(notification.type)}
@@ -226,17 +255,27 @@ export default function Notifications() {
               <div className="notification-text">
                 {notification.message || (
                   <>
-                    <strong>{notification.user?.first_name} {notification.user?.last_name}</strong>{' '}
+                    <strong>{notification.actor_name}</strong>{' '}
                     {getNotificationText(notification)}
                   </>
                 )}
               </div>
               <div className="notification-time">
-                {formatTime(notification.created_at)}
+                {notification.created_at ? (() => {
+                  try {
+                    return formatRelativeTime(notification.created_at);
+                  } catch (error) {
+                    console.error('Date formatting error:', error, notification.created_at);
+                    return new Date(notification.created_at).toLocaleDateString();
+                  }
+                })() : 'Unknown time'}
               </div>
             </div>
             {!notification.read_at && (
               <div className="notification-dot"></div>
+            )}
+            {notification.action_url && (
+              <div className="notification-arrow">→</div>
             )}
           </div>
         ))}

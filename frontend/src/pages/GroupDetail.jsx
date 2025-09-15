@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
 import { useUser } from '../context/useUser';
@@ -8,6 +8,7 @@ import JoinRequests from '../components/JoinRequests';
 
 export default function GroupDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useUser();
   const [group, setGroup] = useState(null);
   const [members, setMembers] = useState([]);
@@ -33,6 +34,14 @@ export default function GroupDetail() {
       fetchGroupDetails();
     }
   }, [id, user]);
+
+  // Handle tab parameter from URL
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['posts', 'events', 'members', 'requests'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const fetchGroupDetails = async () => {
     try {

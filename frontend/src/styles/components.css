@@ -1283,6 +1283,30 @@
   transition: background-color 0.2s ease;
 }
 
+.notification.clickable {
+  cursor: pointer;
+  border-left: 3px solid var(--primary-color);
+}
+
+.notification.clickable:hover {
+  background: var(--bg-light);
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.notification-arrow {
+  margin-left: auto;
+  color: var(--primary-color);
+  font-weight: bold;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.notification.clickable:hover .notification-arrow {
+  opacity: 1;
+}
+
 .notification:hover {
   background-color: var(--bg-secondary);
 }

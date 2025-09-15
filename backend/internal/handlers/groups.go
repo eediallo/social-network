@@ -102,7 +102,7 @@ func (h *GroupsHandler) Invite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// notify invited user
-	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), body.UserID, "group_invite", sess.UserID, iid)
+	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), body.UserID, "group_invite", sess.UserID, gid)
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": iid, "status": "pending"})
 }
 
@@ -156,7 +156,7 @@ func (h *GroupsHandler) RequestJoin(w http.ResponseWriter, r *http.Request) {
 	var owner string
 	_ = h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&owner)
 	if owner != "" {
-		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), owner, "group_join_request", sess.UserID, rid)
+		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), owner, "group_join_request", sess.UserID, gid)
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": rid, "status": "pending"})
 }

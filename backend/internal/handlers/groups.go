@@ -341,3 +341,44 @@ func (h *GroupsHandler) ListEventResponses(w http.ResponseWriter, r *http.Reques
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }
+
+// List group members
+func (h *GroupsHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	_, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+
+	// Allow anyone to see group members (public information)
+	// No need to check if user is member
+
+	rows, err := h.DB.Query(`
+		SELECT gm.user_id, gm.role, gm.joined_at, u.first_name, u.last_name
+		FROM group_members gm
+		JOIN users u ON u.id = gm.user_id
+		WHERE gm.group_id = ?
+		ORDER BY gm.joined_at ASC
+	`, gid)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type member struct {
+		UserID    string `json:"user_id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Role      string `json:"role"`
+		JoinedAt  string `json:"joined_at"`
+	}
+	var out []member
+	for rows.Next() {
+		var m member
+		_ = rows.Scan(&m.UserID, &m.Role, &m.JoinedAt, &m.FirstName, &m.LastName)
+		out = append(out, m)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}

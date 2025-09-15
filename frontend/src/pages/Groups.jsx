@@ -6,6 +6,7 @@ export default function Groups() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
 
@@ -58,6 +59,7 @@ export default function Groups() {
       const res = await fetch('/api/groups', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
+        
         // Map backend data to frontend format
         const mappedGroups = data.map(group => ({
           id: group.ID,
@@ -66,17 +68,17 @@ export default function Groups() {
           description: group.Description,
           created_at: group.CreatedAt,
           member_count: group.member_count || 0,
-          is_member: false, // Default value
-          is_admin: false // Default value
+          is_member: group.is_member === 1, // Convert 1/0 to boolean
+          is_admin: group.user_role === 'owner' // Check if user is owner
         }));
+        
         setGroups(mappedGroups);
       } else {
         // Use mock data for testing UI
-        console.log('Using mock groups data for UI testing');
         setGroups(mockGroups);
       }
     } catch (err) {
-      console.log('Network error, using mock groups data for UI testing');
+      // Use mock data for testing UI
       setGroups(mockGroups);
     } finally {
       setLoading(false);
@@ -102,6 +104,7 @@ export default function Groups() {
 
       if (res.ok) {
         const newGroup = await res.json();
+        
         // Map backend response to frontend format
         const mappedGroup = {
           id: newGroup.ID,
@@ -110,14 +113,23 @@ export default function Groups() {
           description: newGroup.Description,
           created_at: newGroup.CreatedAt,
           member_count: 1, // Creator is the first member
-          is_member: true,
-          is_admin: true
+          is_member: true, // Creator is always a member
+          is_admin: true   // Creator is always the admin/owner
         };
-        setGroups([mappedGroup, ...groups]);
+        
+        // Update state with the new group
+        setGroups(prevGroups => [mappedGroup, ...prevGroups]);
+        
         setShowCreateForm(false);
         e.target.reset();
+        setError(''); // Clear any previous errors
+        setSuccess(`Group "${mappedGroup.title}" created successfully!`);
+        
+        // Clear success message after 3 seconds
+        setTimeout(() => setSuccess(''), 3000);
       } else {
-        setError('Failed to create group');
+        const errorText = await res.text();
+        setError(`Failed to create group: ${errorText}`);
       }
     } catch (err) {
       setError('Network error');
@@ -191,6 +203,14 @@ export default function Groups() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div className="card mb-4">
+          <div className="card-body text-center">
+            <p className="text-success">{success}</p>
           </div>
         </div>
       )}

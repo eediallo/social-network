@@ -33,18 +33,40 @@ func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	// owner is a member
 	_, _ = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?,'owner')", gid, sess.UserID)
-	_ = json.NewEncoder(w).Encode(map[string]string{"id": gid})
+
+	// Get the actual created timestamp from the database
+	var createdAt string
+	_ = h.DB.QueryRow("SELECT created_at FROM groups WHERE id = ?", gid).Scan(&createdAt)
+
+	// Return the complete group data
+	groupData := map[string]interface{}{
+		"ID":          gid,
+		"OwnerID":     sess.UserID,
+		"Title":       body.Title,
+		"Description": body.Description,
+		"CreatedAt":   createdAt,
+	}
+
+	_ = json.NewEncoder(w).Encode(groupData)
 }
 
 func (h *GroupsHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	rows, err := h.DB.Query(`
 		SELECT g.id, g.owner_user_id, g.title, g.description, g.created_at,
-		       COUNT(gm.user_id) as member_count
+		       COUNT(gm.user_id) as member_count,
+		       CASE WHEN g.owner_user_id = ? THEN 'owner' ELSE gm.role END as user_role,
+		       CASE WHEN g.owner_user_id = ? OR gm.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member
 		FROM groups g
-		LEFT JOIN group_members gm ON gm.group_id = g.id
-		GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at
+		LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
+		GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at, user_role, is_member
 		ORDER BY g.created_at DESC LIMIT 100
-	`)
+	`, sess.UserID, sess.UserID, sess.UserID)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
@@ -52,12 +74,14 @@ func (h *GroupsHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	type g struct {
 		ID, OwnerID, Title, Description, CreatedAt string
-		MemberCount                                int `json:"member_count"`
+		MemberCount                                int    `json:"member_count"`
+		UserRole                                   string `json:"user_role"`
+		IsMember                                   int    `json:"is_member"`
 	}
 	var out []g
 	for rows.Next() {
 		var x g
-		_ = rows.Scan(&x.ID, &x.OwnerID, &x.Title, &x.Description, &x.CreatedAt, &x.MemberCount)
+		_ = rows.Scan(&x.ID, &x.OwnerID, &x.Title, &x.Description, &x.CreatedAt, &x.MemberCount, &x.UserRole, &x.IsMember)
 		out = append(out, x)
 	}
 	_ = json.NewEncoder(w).Encode(out)

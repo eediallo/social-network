@@ -50,7 +50,10 @@ export default function Feed() {
 
   const fetchPosts = async () => {
     try {
+      console.log('Fetching posts from /api/feed');
       const res = await fetch('/api/feed', { credentials: 'include' });
+      console.log('Feed response status:', res.status);
+      console.log('Feed response headers:', res.headers);
       if (res.ok) {
         const data = await res.json();
         console.log('Backend feed data:', data);
@@ -64,19 +67,20 @@ export default function Feed() {
           first_name: post.FirstName || 'User',
           last_name: post.LastName || post.UserID.substring(0, 8),
           likes: 0,
-          comments: 0
+          comments: 0,
+          images: post.images || []
         }));
         console.log('Mapped posts:', mappedPosts);
+        console.log('First post images:', mappedPosts[0]?.images);
         setPosts(mappedPosts);
       } else {
         console.log('Backend feed failed, status:', res.status);
-        // Use mock data for testing UI improvements
-        console.log('Using mock data for UI testing');
-        setPosts(mockPosts);
+        console.log('Authentication failed, not using mock data');
+        setPosts([]);
       }
     } catch (err) {
-      console.log('Network error, using mock data for UI testing:', err);
-      setPosts(mockPosts);
+      console.log('Network error:', err);
+      setPosts([]);
     } finally {
       setLoading(false);
     }

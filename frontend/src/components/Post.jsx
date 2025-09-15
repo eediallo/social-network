@@ -10,11 +10,14 @@ export default function Post({ post }) {
   const [commentLoading, setCommentLoading] = useState(false);
   const [likes, setLikes] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
-  const [images, setImages] = useState([]);
+  const [images, setImages] = useState(post.images || []);
   const [imagesLoading, setImagesLoading] = useState(false);
 
   // Debug logging
   console.log('Post component rendered with post:', post);
+  console.log('Post ID for image loading:', post.id);
+  console.log('Post images from props:', post.images);
+  console.log('Images state:', images);
 
   const handleAddComment = async (e) => {
     e.preventDefault();
@@ -84,49 +87,13 @@ export default function Post({ post }) {
     }
   };
 
-  const loadImages = async () => {
-    setImagesLoading(true);
-    try {
-      console.log('Loading images for post:', post.id);
-      const url = `/api/posts/images?post_id=${post.id}`;
-      console.log('Requesting URL:', url);
-      
-      const res = await fetch(url, {
-        credentials: 'include'
-      });
-      
-      console.log('Response status:', res.status);
-      console.log('Response headers:', res.headers);
-      
-      if (res.ok) {
-        const data = await res.json();
-        console.log('Images data received:', data);
-        if (data && Array.isArray(data)) {
-          console.log('Setting images:', data);
-          setImages(data);
-        } else {
-          console.log('No images data, setting empty array');
-          setImages([]);
-        }
-      } else {
-        console.error('Failed to load images, status:', res.status);
-        const errorText = await res.text();
-        console.error('Error response:', errorText);
-        setImages([]);
-      }
-    } catch (err) {
-      console.error('Failed to load images:', err);
-      setImages([]);
-    } finally {
-      setImagesLoading(false);
-    }
-  };
-
+  // Images are now included directly in the post data from the backend
   useEffect(() => {
-    // Load images when component mounts
     console.log('Post component useEffect triggered for post ID:', post.id);
-    loadImages();
-  }, [post.id]);
+    console.log('Post object:', post);
+    console.log('Images from post data:', post.images);
+    setImages(post.images || []);
+  }, [post.id, post.images]);
 
   const toggleComments = () => {
     if (!showComments && comments.length === 0) {
@@ -185,6 +152,7 @@ export default function Post({ post }) {
             {images.map((image, index) => {
               const imageUrl = `/images/${image.path}`;
               console.log('Image URL:', imageUrl);
+              console.log('Image object:', image);
               return (
                 <img
                   key={image.id}
@@ -201,7 +169,9 @@ export default function Post({ post }) {
         ) : (
           <div>
             {console.log('No images to render, images array:', images)}
+            {console.log('Images length:', images.length)}
             {imagesLoading && <div>Loading images...</div>}
+            {!imagesLoading && images.length === 0 && <div>No images found for this post</div>}
           </div>
         )}
         

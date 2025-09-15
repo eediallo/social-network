@@ -57,32 +57,73 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	}
 	// public posts OR posts from users the requester follows (for followers privacy) OR selected where allowed includes requester
 	q := `
-	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at, u.first_name, u.last_name
+	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at, u.first_name, u.last_name,
+	       pi.id as image_id, pi.path as image_path, pi.mime as image_mime
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
 	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
 	LEFT JOIN post_allowed_followers paf ON paf.post_id = p.id AND paf.follower_user_id = ?
+	LEFT JOIN post_images pi ON pi.post_id = p.id
 	WHERE p.privacy = 'public'
 	   OR (p.privacy = 'followers' AND f.follower_user_id IS NOT NULL)
 	   OR (p.privacy = 'selected' AND paf.follower_user_id IS NOT NULL)
-	ORDER BY p.created_at DESC LIMIT 100`
+	ORDER BY p.created_at DESC, pi.created_at ASC LIMIT 100`
 	rows, err := h.DB.Query(q, sess.UserID, sess.UserID)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
-	type post struct {
-		ID, UserID, Text, Privacy string
-		CreatedAt                 string
-		FirstName                 string `json:"FirstName"`
-		LastName                  string `json:"LastName"`
+	type image struct {
+		ID   string `json:"id"`
+		Path string `json:"path"`
+		Mime string `json:"mime"`
 	}
-	var out []post
+	type post struct {
+		ID        string  `json:"ID"`
+		UserID    string  `json:"UserID"`
+		Text      string  `json:"Text"`
+		Privacy   string  `json:"Privacy"`
+		CreatedAt string  `json:"CreatedAt"`
+		FirstName string  `json:"FirstName"`
+		LastName  string  `json:"LastName"`
+		Images    []image `json:"images"`
+	}
+
+	// Group posts and their images
+	postMap := make(map[string]*post)
 	for rows.Next() {
 		var p post
-		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt, &p.FirstName, &p.LastName)
-		out = append(out, p)
+		var imageID, imagePath, imageMime sql.NullString
+		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt, &p.FirstName, &p.LastName, &imageID, &imagePath, &imageMime)
+
+		if existingPost, exists := postMap[p.ID]; exists {
+			// Add image to existing post
+			if imageID.Valid {
+				existingPost.Images = append(existingPost.Images, image{
+					ID:   imageID.String,
+					Path: imagePath.String,
+					Mime: imageMime.String,
+				})
+			}
+		} else {
+			// Create new post
+			p.Images = []image{}
+			if imageID.Valid {
+				p.Images = append(p.Images, image{
+					ID:   imageID.String,
+					Path: imagePath.String,
+					Mime: imageMime.String,
+				})
+			}
+			postMap[p.ID] = &p
+		}
+	}
+
+	// Convert map to slice
+	var out []post
+	for _, p := range postMap {
+		out = append(out, *p)
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }

@@ -35,14 +35,19 @@ function AppRoutes() {
   useEffect(() => {
     async function checkSession() {
       try {
+        console.log('Checking authentication with /api/auth/me');
         const res = await fetch("/api/auth/me", { credentials: "include" });
+        console.log('Auth response status:', res.status);
         if (res.ok) {
           const userData = await res.json();
+          console.log('User authenticated:', userData);
           login(userData);
         } else {
+          console.log('Authentication failed, status:', res.status);
           logout();
         }
-      } catch {
+      } catch (err) {
+        console.log('Authentication error:', err);
         logout();
       } finally {
         setLoading(false);

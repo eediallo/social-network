@@ -37,17 +37,27 @@ func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GroupsHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query("SELECT id, owner_user_id, title, description, created_at FROM groups ORDER BY created_at DESC LIMIT 100")
+	rows, err := h.DB.Query(`
+		SELECT g.id, g.owner_user_id, g.title, g.description, g.created_at,
+		       COUNT(gm.user_id) as member_count
+		FROM groups g
+		LEFT JOIN group_members gm ON gm.group_id = g.id
+		GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at
+		ORDER BY g.created_at DESC LIMIT 100
+	`)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
-	type g struct{ ID, OwnerID, Title, Description, CreatedAt string }
+	type g struct {
+		ID, OwnerID, Title, Description, CreatedAt string
+		MemberCount                                int `json:"member_count"`
+	}
 	var out []g
 	for rows.Next() {
 		var x g
-		_ = rows.Scan(&x.ID, &x.OwnerID, &x.Title, &x.Description, &x.CreatedAt)
+		_ = rows.Scan(&x.ID, &x.OwnerID, &x.Title, &x.Description, &x.CreatedAt, &x.MemberCount)
 		out = append(out, x)
 	}
 	_ = json.NewEncoder(w).Encode(out)
@@ -379,6 +389,141 @@ func (h *GroupsHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		var m member
 		_ = rows.Scan(&m.UserID, &m.Role, &m.JoinedAt, &m.FirstName, &m.LastName)
 		out = append(out, m)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// List sent invitations by the current user
+func (h *GroupsHandler) ListSentInvitations(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	rows, err := h.DB.Query(`
+		SELECT gi.id, gi.group_id, gi.to_user_id, gi.status, gi.created_at,
+		       g.title as group_title, g.description as group_description,
+		       u.first_name, u.last_name
+		FROM group_invitations gi
+		JOIN groups g ON g.id = gi.group_id
+		JOIN users u ON u.id = gi.to_user_id
+		WHERE gi.from_user_id = ?
+		ORDER BY gi.created_at DESC
+	`, sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type sentInvitation struct {
+		ID         string `json:"id"`
+		GroupID    string `json:"group_id"`
+		GroupTitle string `json:"group_title"`
+		GroupDesc  string `json:"group_description"`
+		ToUserID   string `json:"to_user_id"`
+		ToUserName string `json:"to_user_name"`
+		Status     string `json:"status"`
+		CreatedAt  string `json:"created_at"`
+	}
+	var out []sentInvitation
+	for rows.Next() {
+		var inv sentInvitation
+		var firstName, lastName string
+		_ = rows.Scan(&inv.ID, &inv.GroupID, &inv.ToUserID, &inv.Status, &inv.CreatedAt,
+			&inv.GroupTitle, &inv.GroupDesc, &firstName, &lastName)
+		inv.ToUserName = firstName + " " + lastName
+		out = append(out, inv)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// List received group invitations for the current user
+func (h *GroupsHandler) ListReceivedInvitations(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	rows, err := h.DB.Query(`
+		SELECT gi.id, gi.group_id, gi.from_user_id, gi.status, gi.created_at,
+		       g.title as group_title, g.description as group_description,
+		       u.first_name, u.last_name
+		FROM group_invitations gi
+		JOIN groups g ON g.id = gi.group_id
+		JOIN users u ON u.id = gi.from_user_id
+		WHERE gi.to_user_id = ? AND gi.status = 'pending'
+		ORDER BY gi.created_at DESC
+	`, sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type receivedInvitation struct {
+		ID           string `json:"id"`
+		GroupID      string `json:"group_id"`
+		GroupTitle   string `json:"group_title"`
+		GroupDesc    string `json:"group_description"`
+		FromUserID   string `json:"from_user_id"`
+		FromUserName string `json:"from_user_name"`
+		Status       string `json:"status"`
+		CreatedAt    string `json:"created_at"`
+	}
+	var out []receivedInvitation
+	for rows.Next() {
+		var inv receivedInvitation
+		var firstName, lastName string
+		_ = rows.Scan(&inv.ID, &inv.GroupID, &inv.FromUserID, &inv.Status, &inv.CreatedAt,
+			&inv.GroupTitle, &inv.GroupDesc, &firstName, &lastName)
+		inv.FromUserName = firstName + " " + lastName
+		out = append(out, inv)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// Search users for invitations
+func (h *GroupsHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		http.Error(w, "query parameter required", http.StatusBadRequest)
+		return
+	}
+
+	// Search users by name (excluding current user)
+	rows, err := h.DB.Query(`
+		SELECT id, first_name, last_name, email
+		FROM users 
+		WHERE id != ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)
+		ORDER BY first_name, last_name
+		LIMIT 20
+	`, sess.UserID, "%"+query+"%", "%"+query+"%", "%"+query+"%")
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type user struct {
+		ID        string `json:"id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Email     string `json:"email"`
+	}
+	var out []user
+	for rows.Next() {
+		var u user
+		_ = rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email)
+		out = append(out, u)
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }

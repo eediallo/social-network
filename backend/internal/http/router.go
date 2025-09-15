@@ -105,9 +105,18 @@ func NewRouter(db *sql.DB) http.Handler {
 	// WebSocket
 	wsHub := ws.NewHub()
 	wsHandler := &handlers.WSHandler{DB: db, Hub: wsHub}
+	chatHandler := &handlers.ChatHandler{DB: db, Hub: wsHub}
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/ws", wsHandler.Serve)
-	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/messages/direct", wsHandler.ListDirectMessages)
-	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/messages/group", wsHandler.ListGroupMessages)
+
+	// Chat API routes
+	r.Route("/api/chat", func(r chi.Router) {
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/direct", chatHandler.SendDirectMessage)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/direct/{userId}", chatHandler.ListDirectMessages)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/group/{id}", chatHandler.SendGroupMessage)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/group/{id}", chatHandler.ListGroupMessages)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/read/{messageId}", chatHandler.MarkMessageAsRead)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/conversations", chatHandler.GetConversations)
+	})
 
 	groupsHandler := &handlers.GroupsHandler{DB: db}
 	groupEventsHandler := &handlers.GroupEventsHandler{DB: db}

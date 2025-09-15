@@ -12,7 +12,8 @@ export default function Navbar() {
     { path: '/groups', label: 'Groups', icon: '👥' },
     { path: '/invitations', label: 'Invitations', icon: '📧' },
     { path: '/notifications', label: 'Notifications', icon: '🔔', badge: notificationCount },
-    { path: '/chat', label: 'Chat', icon: '💬' },
+    { path: '/messages', label: 'Messages', icon: '💬' },
+    { path: '/chat', label: 'Chat', icon: '🗨️' },
   ];
 
   useEffect(() => {

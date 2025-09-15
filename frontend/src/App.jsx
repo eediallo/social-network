@@ -16,6 +16,7 @@ import Groups from "./pages/Groups";
 import GroupDetail from "./pages/GroupDetail";
 import Invitations from "./pages/Invitations";
 import Notifications from "./pages/Notifications";
+import Messages from "./pages/Messages";
 import Chat from "./pages/Chat";
 import { UserProvider } from "./context/UserContext";
 import { useUser } from "./context/useUser";
@@ -140,6 +141,14 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <Notifications />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                <ProtectedRoute>
+                  <Messages />
                 </ProtectedRoute>
               }
             />

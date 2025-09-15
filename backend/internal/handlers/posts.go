@@ -69,7 +69,7 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	WHERE p.privacy = 'public'
 	   OR (p.privacy = 'followers' AND f.follower_user_id IS NOT NULL)
 	   OR (p.privacy = 'selected' AND paf.follower_user_id IS NOT NULL)
-	ORDER BY p.created_at DESC, pi.created_at ASC LIMIT 100`
+	ORDER BY p.created_at DESC LIMIT 100`
 	rows, err := h.DB.Query(q, sess.UserID, sess.UserID)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
@@ -92,8 +92,10 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 		Images    []image `json:"images"`
 	}
 
-	// Group posts and their images
+	// Group posts and their images while preserving order
 	postMap := make(map[string]*post)
+	var postOrder []string // Track order of posts
+
 	for rows.Next() {
 		var p post
 		var imageID, imageURL, imageFormat sql.NullString
@@ -119,13 +121,16 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 			postMap[p.ID] = &p
+			postOrder = append(postOrder, p.ID) // Track order
 		}
 	}
 
-	// Convert map to slice
+	// Convert map to slice in the correct order
 	var out []post
-	for _, p := range postMap {
-		out = append(out, *p)
+	for _, postID := range postOrder {
+		if p, exists := postMap[postID]; exists {
+			out = append(out, *p)
+		}
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }

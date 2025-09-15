@@ -150,7 +150,8 @@ export default function Post({ post }) {
           <div className="post-images">
             {console.log('Rendering images:', images)}
             {images.map((image, index) => {
-              const imageUrl = `/images/${image.path}`;
+              // Handle both Cloudinary URLs and local URLs
+              const imageUrl = image.url || `/images/${image.path}`;
               console.log('Image URL:', imageUrl);
               console.log('Image object:', image);
               return (

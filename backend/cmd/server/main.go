@@ -8,9 +8,16 @@ import (
 
 	"social-network/backend/internal/db"
 	customhttp "social-network/backend/internal/http"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load environment variables from .env file
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Error loading .env file: %v", err)
+	}
+
 	// Open DB
 	database, err := db.OpenSQLite()
 	if err != nil {

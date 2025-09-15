@@ -2,10 +2,13 @@ package http
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 
 	"social-network/backend/internal/auth"
+	"social-network/backend/internal/config"
 	"social-network/backend/internal/handlers"
+	"social-network/backend/internal/services"
 	ws "social-network/backend/internal/websocket"
 
 	"github.com/go-chi/chi/v5"
@@ -47,7 +50,24 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/logout", authHandler.Logout)
 	})
 
-	imagesHandler := &handlers.ImagesHandler{DB: db, StorageDir: "internal/images"}
+	// Initialize Cloudinary service
+	cloudinaryCfg := config.LoadCloudinaryConfig()
+	secretPreview := cloudinaryCfg.APISecret
+	if len(secretPreview) > 8 {
+		secretPreview = secretPreview[:8] + "..."
+	}
+	log.Printf("Cloudinary config loaded: CloudName=%s, APIKey=%s, APISecret=%s",
+		cloudinaryCfg.CloudName, cloudinaryCfg.APIKey, secretPreview)
+
+	cloudinarySvc, err := services.NewCloudinaryService(cloudinaryCfg)
+	if err != nil {
+		log.Printf("Warning: Cloudinary not configured: %v", err)
+		// Continue without Cloudinary - will fall back to local storage
+	} else {
+		log.Printf("Cloudinary service initialized successfully")
+	}
+
+	imagesHandler := &handlers.ImagesHandler{DB: db, CloudinarySvc: cloudinarySvc}
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/avatar", imagesHandler.UploadAvatar)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/post", imagesHandler.UploadPostImage)
 	postsHandler := &handlers.PostsHandler{DB: db}

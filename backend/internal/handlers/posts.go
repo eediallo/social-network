@@ -58,7 +58,9 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	// public posts OR posts from users the requester follows (for followers privacy) OR selected where allowed includes requester
 	q := `
 	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at, u.first_name, u.last_name,
-	       pi.id as image_id, pi.path as image_path, pi.mime as image_mime
+	       pi.id as image_id, 
+	       COALESCE(pi.cloudinary_secure_url, pi.cloudinary_url, '/images/' || pi.path) as image_url,
+	       pi.format as image_format
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
 	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
@@ -75,9 +77,9 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type image struct {
-		ID   string `json:"id"`
-		Path string `json:"path"`
-		Mime string `json:"mime"`
+		ID     string `json:"id"`
+		URL    string `json:"url"`
+		Format string `json:"format"`
 	}
 	type post struct {
 		ID        string  `json:"ID"`
@@ -94,16 +96,16 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	postMap := make(map[string]*post)
 	for rows.Next() {
 		var p post
-		var imageID, imagePath, imageMime sql.NullString
-		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt, &p.FirstName, &p.LastName, &imageID, &imagePath, &imageMime)
+		var imageID, imageURL, imageFormat sql.NullString
+		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt, &p.FirstName, &p.LastName, &imageID, &imageURL, &imageFormat)
 
 		if existingPost, exists := postMap[p.ID]; exists {
 			// Add image to existing post
 			if imageID.Valid {
 				existingPost.Images = append(existingPost.Images, image{
-					ID:   imageID.String,
-					Path: imagePath.String,
-					Mime: imageMime.String,
+					ID:     imageID.String,
+					URL:    imageURL.String,
+					Format: imageFormat.String,
 				})
 			}
 		} else {
@@ -111,9 +113,9 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 			p.Images = []image{}
 			if imageID.Valid {
 				p.Images = append(p.Images, image{
-					ID:   imageID.String,
-					Path: imagePath.String,
-					Mime: imageMime.String,
+					ID:     imageID.String,
+					URL:    imageURL.String,
+					Format: imageFormat.String,
 				})
 			}
 			postMap[p.ID] = &p

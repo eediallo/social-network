@@ -25,8 +25,10 @@ export default function GroupDetail() {
   const [eventForm, setEventForm] = useState({
     title: '',
     description: '',
-    datetime: ''
+    event_date: '',
+    location: ''
   });
+  const [eventsRefreshTrigger, setEventsRefreshTrigger] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -163,7 +165,7 @@ export default function GroupDetail() {
 
   const handleCreateEvent = async (e) => {
     e.preventDefault();
-    if (!eventForm.title.trim() || !eventForm.datetime) return;
+    if (!eventForm.title.trim() || !eventForm.event_date) return;
 
     try {
       console.log('Creating event for group:', id, eventForm);
@@ -179,9 +181,12 @@ export default function GroupDetail() {
         const result = await res.json();
         console.log('Event created:', result);
         alert('Event created successfully!');
-        setEventForm({ title: '', description: '', datetime: '' });
+        setEventForm({ title: '', description: '', event_date: '', location: '' });
         setShowEventForm(false);
-        fetchGroupDetails();
+        // Switch to events tab to show the new event
+        setActiveTab('events');
+        // Trigger refresh of the GroupEvents component
+        setEventsRefreshTrigger(prev => prev + 1);
       } else {
         const errorText = await res.text();
         console.error('Create event failed:', res.status, errorText);
@@ -354,10 +359,19 @@ export default function GroupDetail() {
                 <div className="form-group">
                   <input
                     type="datetime-local"
-                    value={eventForm.datetime}
-                    onChange={(e) => setEventForm({...eventForm, datetime: e.target.value})}
+                    value={eventForm.event_date}
+                    onChange={(e) => setEventForm({...eventForm, event_date: e.target.value})}
                     className="form-input"
                     required
+                  />
+                </div>
+                <div className="form-group">
+                  <input
+                    type="text"
+                    placeholder="Location (optional)"
+                    value={eventForm.location}
+                    onChange={(e) => setEventForm({...eventForm, location: e.target.value})}
+                    className="form-input"
                   />
                 </div>
                 <div className="d-flex gap-2">
@@ -454,7 +468,7 @@ export default function GroupDetail() {
         )}
 
         {activeTab === 'events' && (
-          <GroupEvents groupId={id} isMember={isMember} />
+          <GroupEvents key={`events-${id}-${eventsRefreshTrigger}`} groupId={id} isMember={isMember} />
         )}
 
         {activeTab === 'members' && (

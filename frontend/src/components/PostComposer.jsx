@@ -33,7 +33,7 @@ export default function PostComposer({ onPostCreated }) {
       throw new Error('Failed to upload image');
     }
 
-    return await res.text(); // Returns filename
+    return await res.json(); // Returns Cloudinary data
   };
 
   const handleSubmit = async (e) => {
@@ -58,19 +58,28 @@ export default function PostComposer({ onPostCreated }) {
       if (res.ok) {
         const newPost = await res.json();
         
-        // Upload images if any
+        // Upload images if any and collect Cloudinary data
+        let uploadedImages = [];
         if (images.length > 0) {
           try {
-            await Promise.all(
+            console.log('Uploading images for post:', newPost.id, 'Images:', images);
+            const uploadResults = await Promise.all(
               images.map(image => uploadImage(image, newPost.id))
             );
+            console.log('Upload results:', uploadResults);
+            uploadedImages = uploadResults.map(result => ({
+              id: result.id,
+              url: result.secure_url || result.url,
+              format: result.format
+            }));
+            console.log('Mapped uploaded images:', uploadedImages);
           } catch (imgError) {
             console.error('Image upload failed:', imgError);
             // Continue even if image upload fails
           }
         }
 
-        // Create a mock post object for the feed
+        // Create a post object for the feed with Cloudinary URLs
         const post = {
           id: newPost.id,
           user_id: user.id,
@@ -79,13 +88,10 @@ export default function PostComposer({ onPostCreated }) {
           created_at: new Date().toISOString(),
           first_name: user.first_name,
           last_name: user.last_name,
-          images: images.map(img => ({
-            id: img.id,
-            filename: img.file.name,
-            preview: img.preview
-          }))
+          images: uploadedImages
         };
         
+        console.log('Created post object:', post);
         onPostCreated(post);
         setText('');
         setImages([]);
@@ -112,6 +118,7 @@ export default function PostComposer({ onPostCreated }) {
         
         <ImageUpload
           onImagesChange={setImages}
+          images={images}
           maxImages={4}
           disabled={loading}
         />

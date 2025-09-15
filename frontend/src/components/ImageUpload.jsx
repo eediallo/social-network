@@ -1,9 +1,16 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
-export default function ImageUpload({ onImagesChange, maxImages = 4, disabled = false }) {
+export default function ImageUpload({ onImagesChange, maxImages = 4, disabled = false, images: externalImages }) {
   const [images, setImages] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Sync with external images state
+  useEffect(() => {
+    if (externalImages && externalImages.length === 0) {
+      setImages([]);
+    }
+  }, [externalImages]);
 
   const handleFiles = (files) => {
     const fileArray = Array.from(files);

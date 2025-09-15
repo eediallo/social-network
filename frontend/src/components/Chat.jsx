@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
+import NewConversation from './NewConversation';
 
-export default function Chat({ type, targetId, targetName, onClose }) {
+export default function Chat({ type, targetId, targetName, onClose, onSelectConversation }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,11 @@ export default function Chat({ type, targetId, targetName, onClose }) {
   };
 
   const fetchMessages = async () => {
+    if (targetId === 'new') {
+      setLoading(false);
+      return;
+    }
+    
     try {
       setLoading(true);
       const endpoint = type === 'direct' 
@@ -115,6 +121,10 @@ export default function Chat({ type, targetId, targetName, onClose }) {
       console.error('Error sending message:', err);
     }
   };
+
+  if (targetId === 'new') {
+    return <NewConversation onClose={onClose} onSelectUser={(user) => onSelectConversation({ type: 'direct', id: user.id, name: user.name })} />;
+  }
 
   if (loading) {
     return (

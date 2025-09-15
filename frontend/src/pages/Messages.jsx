@@ -27,6 +27,7 @@ export default function Messages() {
               targetId={selectedChat.id}
               targetName={selectedChat.name}
               onClose={handleCloseChat}
+              onSelectConversation={handleSelectConversation}
             />
           ) : (
             <div className="messages-welcome">

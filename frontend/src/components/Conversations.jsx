@@ -1,31 +1,44 @@
 import { useState, useEffect } from 'react';
+import { useUser } from '../context/useUser';
 import { getInitials } from '../utils/avatarUtils';
 import { formatRelativeTime } from '../utils/dateUtils';
 
 export default function Conversations({ onSelectConversation }) {
+  const { user, isAuthenticated } = useUser();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchConversations();
-  }, []);
+    console.log('Conversations component - isAuthenticated:', isAuthenticated, 'user:', user);
+    if (isAuthenticated) {
+      fetchConversations();
+    } else {
+      setLoading(false);
+      setError('Please log in to view conversations');
+    }
+  }, [isAuthenticated]);
 
   const fetchConversations = async () => {
     try {
       setLoading(true);
       setError('');
+      console.log('Fetching conversations...');
       const res = await fetch('/api/chat/conversations', { credentials: 'include' });
       
+      console.log('Conversations response status:', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('Conversations data:', data);
         setConversations(data || []);
       } else {
-        setError('Failed to load conversations');
+        const errorText = await res.text();
+        console.error('Conversations error:', res.status, errorText);
+        setError(`Failed to load conversations: ${res.status} ${errorText}`);
       }
     } catch (err) {
       console.error('Error fetching conversations:', err);
-      setError('Failed to load conversations');
+      setError(`Failed to load conversations: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -80,8 +93,17 @@ export default function Conversations({ onSelectConversation }) {
 
       {conversations.length === 0 ? (
         <div className="conversations-empty">
-          <p>No conversations yet</p>
-          <p className="text-muted">Start chatting with your friends!</p>
+          <div className="empty-state">
+            <div className="empty-icon">💬</div>
+            <h4>No conversations yet</h4>
+            <p>Start a new conversation with someone</p>
+            <button 
+              onClick={() => onSelectConversation({ type: 'new', id: 'new', name: 'New Message' })}
+              className="btn btn-primary btn-sm"
+            >
+              Start New Message
+            </button>
+          </div>
         </div>
       ) : (
         <div className="conversations-list">

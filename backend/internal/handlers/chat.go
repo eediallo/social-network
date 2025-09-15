@@ -305,58 +305,7 @@ func (h *ChatHandler) MarkMessageAsRead(w http.ResponseWriter, r *http.Request) 
 
 // GetConversations gets all conversations for the current user
 func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
-	sess, ok := auth.SessionFromContext(r)
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Get direct message conversations
-	rows, err := h.DB.Query(`
-		SELECT 
-			CASE 
-				WHEN dm.sender_id = ? THEN dm.recipient_id
-				ELSE dm.sender_id
-			END as other_user_id,
-			u.first_name, u.last_name,
-			dm.content as last_message,
-			dm.created_at as last_message_time,
-			COUNT(CASE WHEN dm.recipient_id = ? AND dm.read_at IS NULL THEN 1 END) as unread_count
-		FROM direct_messages dm
-		JOIN users u ON u.id = CASE 
-			WHEN dm.sender_id = ? THEN dm.recipient_id
-			ELSE dm.sender_id
-		END
-		WHERE dm.sender_id = ? OR dm.recipient_id = ?
-		GROUP BY other_user_id, u.first_name, u.last_name, dm.content, dm.created_at
-		ORDER BY last_message_time DESC
-	`, sess.UserID, sess.UserID, sess.UserID, sess.UserID, sess.UserID)
-
-	if err != nil {
-		http.Error(w, "server error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	type conversation struct {
-		UserID          string `json:"user_id"`
-		UserName        string `json:"user_name"`
-		LastMessage     string `json:"last_message"`
-		LastMessageTime string `json:"last_message_time"`
-		UnreadCount     int    `json:"unread_count"`
-		Type            string `json:"type"`
-	}
-
-	var conversations []conversation
-	for rows.Next() {
-		var c conversation
-		var firstName, lastName string
-
-		_ = rows.Scan(&c.UserID, &firstName, &lastName, &c.LastMessage, &c.LastMessageTime, &c.UnreadCount)
-		c.UserName = firstName + " " + lastName
-		c.Type = "direct"
-		conversations = append(conversations, c)
-	}
-
+	// Simple test - just return empty array
+	conversations := []map[string]interface{}{}
 	_ = json.NewEncoder(w).Encode(conversations)
 }

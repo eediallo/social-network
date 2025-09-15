@@ -2543,6 +2543,132 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Group Events Component */
+.group-events {
+  background: var(--bg-white);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.event-card {
+  background: var(--bg-light);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-light);
+  transition: all 0.2s ease;
+}
+
+.event-card:hover {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.event-header {
+  margin-bottom: var(--spacing-sm);
+}
+
+.event-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.event-meta {
+  display: flex;
+  gap: var(--spacing-md);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.event-creator {
+  font-weight: 500;
+}
+
+.event-date {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.event-description {
+  margin: var(--spacing-sm) 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.event-location {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-sm) 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.event-responses {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-light);
+}
+
+.response-counts {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.response-count {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.response-count.going {
+  color: var(--success-color, #10b981);
+}
+
+.response-count.maybe {
+  color: var(--warning-color, #f59e0b);
+}
+
+.response-count.not-going {
+  color: var(--error-color, #ef4444);
+}
+
+.response-icon {
+  font-size: 1rem;
+}
+
+.response-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.response-actions .btn {
+  font-size: 0.875rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
 .join-requests-header {
   display: flex;
   justify-content: space-between;

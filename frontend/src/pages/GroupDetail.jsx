@@ -5,6 +5,7 @@ import { getInitials } from '../utils/avatarUtils';
 import { useUser } from '../context/useUser';
 import UserSearch from '../components/UserSearch';
 import JoinRequests from '../components/JoinRequests';
+import GroupEvents from '../components/GroupEvents';
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -453,44 +454,7 @@ export default function GroupDetail() {
         )}
 
         {activeTab === 'events' && (
-          <div className="group-events">
-            {events.length === 0 ? (
-              <div className="card">
-                <div className="card-body text-center">
-                  <h3>No events yet</h3>
-                  <p>Create the first event for this group!</p>
-                </div>
-              </div>
-            ) : (
-              events.map(event => (
-                <div key={event.id} className="event-card">
-                  <div className="event-header">
-                    <h3>{event.title}</h3>
-                    <span className="event-date">
-                      {formatRelativeTime(event.datetime)}
-                    </span>
-                  </div>
-                  {event.description && (
-                    <p className="event-description">{event.description}</p>
-                  )}
-                  <div className="event-actions">
-                    <button 
-                      onClick={() => handleEventResponse(event.id, 'going')}
-                      className="btn btn-success btn-sm"
-                    >
-                      Going
-                    </button>
-                    <button 
-                      onClick={() => handleEventResponse(event.id, 'not_going')}
-                      className="btn btn-outline btn-sm"
-                    >
-                      Not Going
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <GroupEvents groupId={id} isMember={isMember} />
         )}
 
         {activeTab === 'members' && (

@@ -11,13 +11,7 @@ export default function Post({ post }) {
   const [likes, setLikes] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [images, setImages] = useState(post.images || []);
-  const [imagesLoading, setImagesLoading] = useState(false);
 
-  // Debug logging
-  console.log('Post component rendered with post:', post);
-  console.log('Post ID for image loading:', post.id);
-  console.log('Post images from props:', post.images);
-  console.log('Images state:', images);
 
   const handleAddComment = async (e) => {
     e.preventDefault();
@@ -89,9 +83,6 @@ export default function Post({ post }) {
 
   // Images are now included directly in the post data from the backend
   useEffect(() => {
-    console.log('Post component useEffect triggered for post ID:', post.id);
-    console.log('Post object:', post);
-    console.log('Images from post data:', post.images);
     setImages(post.images || []);
   }, [post.id, post.images]);
 
@@ -140,56 +131,21 @@ export default function Post({ post }) {
       <div className="post-content">
         <div className="post-text">{post.text}</div>
         
-        {imagesLoading && (
-          <div className="post-images-loading">
-            <div className="loading"></div>
-          </div>
-        )}
-        
-        {images.length > 0 ? (
+        {images.length > 0 && (
           <div className="post-images">
-            {console.log('Rendering images:', images)}
-            {images.map((image, index) => {
-              // Handle both Cloudinary URLs and local URLs
-              const imageUrl = image.url || `/images/${image.path}`;
-              console.log('Image URL:', imageUrl);
-              console.log('Image object:', image);
-              return (
-                <img
-                  key={image.id}
-                  src={imageUrl}
-                  alt={`Post image ${index + 1}`}
-                  className="post-image"
-                  loading="lazy"
-                  onLoad={() => console.log('Image loaded successfully:', imageUrl)}
-                  onError={(e) => console.error('Image failed to load:', imageUrl, e)}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <div>
-            {console.log('No images to render, images array:', images)}
-            {console.log('Images length:', images.length)}
-            {imagesLoading && <div>Loading images...</div>}
-            {!imagesLoading && images.length === 0 && <div>No images found for this post</div>}
-          </div>
-        )}
-        
-        {/* Fallback for images passed directly in post object (from PostComposer) - only if no backend images */}
-        {post.images && post.images.length > 0 && images.length === 0 && (
-          <div className="post-images">
-            {post.images.map((image, index) => (
+            {images.map((image, index) => (
               <img
                 key={image.id}
-                src={image.preview}
+                src={image.url}
                 alt={`Post image ${index + 1}`}
                 className="post-image"
                 loading="lazy"
+                onError={(e) => console.error('Image failed to load:', image.url, e)}
               />
             ))}
           </div>
         )}
+        
       </div>
       
       <div className="post-actions">

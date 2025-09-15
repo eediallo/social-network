@@ -250,18 +250,12 @@ export default function Groups() {
                 )}
               </div>
               <div className="group-actions">
-                {group.is_member ? (
-                  <Link
-                    to={`/groups/${group.id}`}
-                    className="btn btn-primary btn-sm w-full"
-                  >
-                    View Group
-                  </Link>
-                ) : (
-                  <button className="btn btn-outline btn-sm w-full">
-                    Join Group
-                  </button>
-                )}
+                <Link
+                  to={`/groups/${group.id}`}
+                  className={`btn btn-sm w-full ${group.is_member ? 'btn-primary' : 'btn-outline'}`}
+                >
+                  {group.is_member ? 'View Group' : 'Join Group'}
+                </Link>
               </div>
             </div>
           </div>

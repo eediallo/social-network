@@ -13,6 +13,7 @@ import Logout from "./pages/Logout";
 import Feed from "./pages/Feed";
 import Profile from "./pages/Profile";
 import Groups from "./pages/Groups";
+import GroupDetail from "./pages/GroupDetail";
 import Notifications from "./pages/Notifications";
 import Chat from "./pages/Chat";
 import { UserProvider } from "./context/UserContext";
@@ -114,6 +115,14 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <Groups />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/groups/:id"
+              element={
+                <ProtectedRoute>
+                  <GroupDetail />
                 </ProtectedRoute>
               }
             />

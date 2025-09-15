@@ -128,6 +128,8 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/invitations/sent", groupsHandler.ListSentInvitations)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/invitations/received", groupsHandler.ListReceivedInvitations)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/search/users", groupsHandler.SearchUsers)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/{id}/join-requests", groupsHandler.ListJoinRequests)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/join-requests/{requestId}/{action}", groupsHandler.HandleJoinRequest)
 
 		// Group posts & comments
 		gp := &handlers.GroupPostsHandler{DB: db}

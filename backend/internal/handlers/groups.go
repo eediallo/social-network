@@ -527,3 +527,135 @@ func (h *GroupsHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }
+
+// List pending join requests for a group (group owners only)
+func (h *GroupsHandler) ListJoinRequests(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	gid := chi.URLParam(r, "id")
+
+	// Check if user is group owner
+	var ownerID string
+	err := h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "group not found", http.StatusNotFound)
+		return
+	}
+
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Get pending join requests
+	rows, err := h.DB.Query(`
+		SELECT gr.id, gr.user_id, gr.created_at,
+		       u.first_name, u.last_name, u.email
+		FROM group_requests gr
+		JOIN users u ON u.id = gr.user_id
+		WHERE gr.group_id = ? AND gr.status = 'pending'
+		ORDER BY gr.created_at ASC
+	`, gid)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type joinRequest struct {
+		ID        string `json:"id"`
+		UserID    string `json:"user_id"`
+		UserName  string `json:"user_name"`
+		UserEmail string `json:"user_email"`
+		CreatedAt string `json:"created_at"`
+	}
+	var out []joinRequest
+	for rows.Next() {
+		var req joinRequest
+		var firstName, lastName string
+		_ = rows.Scan(&req.ID, &req.UserID, &req.CreatedAt, &firstName, &lastName, &req.UserEmail)
+		req.UserName = firstName + " " + lastName
+		out = append(out, req)
+	}
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// Accept or decline a join request (group owners only)
+func (h *GroupsHandler) HandleJoinRequest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	gid := chi.URLParam(r, "id")
+	requestID := chi.URLParam(r, "requestId")
+	action := chi.URLParam(r, "action") // "accept" or "decline"
+
+	if action != "accept" && action != "decline" {
+		http.Error(w, "invalid action", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user is group owner
+	var ownerID string
+	err := h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "group not found", http.StatusNotFound)
+		return
+	}
+
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Get the join request
+	var userID string
+	var status string
+	err = h.DB.QueryRow("SELECT user_id, status FROM group_requests WHERE id = ? AND group_id = ?", requestID, gid).Scan(&userID, &status)
+	if err != nil {
+		http.Error(w, "join request not found", http.StatusNotFound)
+		return
+	}
+
+	if status != "pending" {
+		http.Error(w, "join request already processed", http.StatusConflict)
+		return
+	}
+
+	// Update the join request status
+	newStatus := "accepted"
+	if action == "decline" {
+		newStatus = "declined"
+	}
+
+	_, err = h.DB.Exec("UPDATE group_requests SET status = ? WHERE id = ?", newStatus, requestID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	// If accepted, add user to group
+	if action == "accept" {
+		_, err = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?, 'member')", gid, userID)
+		if err != nil {
+			http.Error(w, "failed to add user to group", http.StatusInternalServerError)
+			return
+		}
+
+		// Notify the user that their request was accepted
+		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)",
+			uuid.NewString(), userID, "group_join_accepted", sess.UserID, gid)
+	} else {
+		// Notify the user that their request was declined
+		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)",
+			uuid.NewString(), userID, "group_join_declined", sess.UserID, gid)
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": newStatus})
+}

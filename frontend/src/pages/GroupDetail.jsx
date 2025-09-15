@@ -4,6 +4,7 @@ import { formatRelativeTime } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
 import { useUser } from '../context/useUser';
 import UserSearch from '../components/UserSearch';
+import JoinRequests from '../components/JoinRequests';
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -387,6 +388,14 @@ export default function GroupDetail() {
         >
           Members
         </button>
+        {isOwner && (
+          <button 
+            className={`tab-button ${activeTab === 'requests' ? 'active' : ''}`}
+            onClick={() => setActiveTab('requests')}
+          >
+            Join Requests
+          </button>
+        )}
       </div>
 
       {/* Tab Content */}
@@ -499,6 +508,18 @@ export default function GroupDetail() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'requests' && (
+          <div className="group-join-requests">
+            <JoinRequests 
+              groupId={id} 
+              onRequestHandled={() => {
+                // Refresh group details when a request is handled
+                fetchGroupDetails();
+              }}
+            />
           </div>
         )}
       </div>

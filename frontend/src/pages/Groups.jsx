@@ -65,7 +65,7 @@ export default function Groups() {
           title: group.Title,
           description: group.Description,
           created_at: group.CreatedAt,
-          member_count: 0, // Default value since backend doesn't return this
+          member_count: group.member_count || 0,
           is_member: false, // Default value
           is_admin: false // Default value
         }));

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
 import { useUser } from '../context/useUser';
+import UserSearch from '../components/UserSearch';
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -18,7 +19,6 @@ export default function GroupDetail() {
   const [isOwner, setIsOwner] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
-  const [inviteUserId, setInviteUserId] = useState('');
   const [eventForm, setEventForm] = useState({
     title: '',
     description: '',
@@ -125,28 +125,28 @@ export default function GroupDetail() {
     }
   };
 
-  const handleInviteUser = async (e) => {
-    e.preventDefault();
-    if (!inviteUserId.trim()) return;
-
+  const handleInviteUser = async (userId) => {
     try {
+      console.log('Inviting user:', userId, 'to group:', id);
       const res = await fetch(`/api/groups/${id}/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: inviteUserId.trim() }),
+        body: JSON.stringify({ user_id: userId }),
         credentials: 'include'
       });
 
+      console.log('Invite response:', res.status);
       if (res.ok) {
-        alert('Invitation sent!');
-        setInviteUserId('');
+        alert('Invitation sent successfully!');
         setShowInviteForm(false);
       } else {
-        alert('Failed to send invitation');
+        const errorText = await res.text();
+        console.error('Invite failed:', res.status, errorText);
+        alert(`Failed to send invitation: ${errorText}`);
       }
     } catch (err) {
       console.error('Error inviting user:', err);
-      alert('Failed to invite user');
+      alert('Failed to invite user. Please try again.');
     }
   };
 
@@ -286,30 +286,22 @@ export default function GroupDetail() {
               </button>
             </div>
             <div className="modal-body">
-              <form onSubmit={handleInviteUser}>
-                <div className="form-group">
-                  <input
-                    type="text"
-                    placeholder="User ID or Email"
-                    value={inviteUserId}
-                    onChange={(e) => setInviteUserId(e.target.value)}
-                    className="form-input"
-                    required
-                  />
-                </div>
-                <div className="d-flex gap-2">
-                  <button type="submit" className="btn btn-primary">
-                    Send Invitation
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowInviteForm(false)}
-                    className="btn btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
+              <div className="form-group">
+                <label className="form-label">Search and invite users:</label>
+                <UserSearch 
+                  onInviteUser={handleInviteUser}
+                  groupId={id}
+                />
+              </div>
+              <div className="form-actions">
+                <button 
+                  type="button" 
+                  onClick={() => setShowInviteForm(false)}
+                  className="btn btn-secondary"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

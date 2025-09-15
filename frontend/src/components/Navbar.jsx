@@ -10,6 +10,7 @@ export default function Navbar() {
   const navItems = [
     { path: '/feed', label: 'Feed', icon: '🏠' },
     { path: '/groups', label: 'Groups', icon: '👥' },
+    { path: '/invitations', label: 'Invitations', icon: '📧' },
     { path: '/notifications', label: 'Notifications', icon: '🔔', badge: notificationCount },
     { path: '/chat', label: 'Chat', icon: '💬' },
   ];

@@ -176,8 +176,8 @@ export default function Post({ post }) {
           </div>
         )}
         
-        {/* Fallback for images passed directly in post object (from PostComposer) */}
-        {post.images && post.images.length > 0 && (
+        {/* Fallback for images passed directly in post object (from PostComposer) - only if no backend images */}
+        {post.images && post.images.length > 0 && images.length === 0 && (
           <div className="post-images">
             {post.images.map((image, index) => (
               <img

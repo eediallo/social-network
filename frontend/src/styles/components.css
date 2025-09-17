@@ -3413,3 +3413,194 @@
   color: var(--text-muted);
   margin-bottom: 1.5rem;
 }
+
+/* Group Chat Styles */
+.conversations-section-header {
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  margin: 0;
+}
+
+.conversations-section-header h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.group-conversation {
+  border-left: 3px solid var(--primary-color);
+}
+
+.group-avatar {
+  background: var(--primary-color) !important;
+  font-size: 1.2rem;
+}
+
+/* New Conversation Tabs */
+.conversation-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.tab-button.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  background: var(--primary-light);
+}
+
+/* Group Items */
+.groups-list {
+  margin-top: 1rem;
+}
+
+.group-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border: 1px solid var(--border-color);
+  margin-bottom: 0.5rem;
+}
+
+.group-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+}
+
+.group-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  margin-right: 0.75rem;
+}
+
+.group-info {
+  flex: 1;
+}
+
+.group-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.group-description {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.group-action {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+}
+
+/* Conversations Actions */
+.conversations-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.conversations-actions .btn {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.8rem;
+}
+
+.conversations-actions .btn-primary {
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  font-weight: 600;
+}
+
+.conversations-actions .btn-primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.new-conversation-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.new-conversation-btn .btn-icon {
+  font-size: 1rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.new-conversation-btn:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Floating Action Button */
+.floating-action-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.floating-action-btn:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.fab-icon {
+  font-size: 1.5rem;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* Hide floating button on mobile when sidebar is visible */
+@media (max-width: 768px) {
+  .floating-action-btn {
+    display: none;
+  }
+}

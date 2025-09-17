@@ -68,6 +68,15 @@ export default function Messages() {
           )}
         </div>
       </div>
+      
+      {/* Floating Action Button for New Conversation */}
+      <button 
+        className="floating-action-btn"
+        onClick={() => handleSelectConversation({ type: 'new', id: 'new', name: 'New Message' })}
+        title="Start new conversation"
+      >
+        <span className="fab-icon">+</span>
+      </button>
     </div>
   );
 }

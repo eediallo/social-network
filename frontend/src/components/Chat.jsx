@@ -233,7 +233,7 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
   };
 
   if (targetId === 'new') {
-    return <NewConversation onClose={onClose} onSelectUser={(user) => onSelectConversation({ type: 'direct', id: user.id, name: user.name })} />;
+    return <NewConversation onClose={onClose} onSelectConversation={onSelectConversation} />;
   }
 
   if (loading) {

@@ -144,12 +144,14 @@ func (h *ChatHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 	createdAt := time.Now().Format("2006-01-02T15:04:05Z")
 
 	// Save message to database
+	log.Printf("Sending group message - groupID: %s, userID: %s, content: %s", groupID, sess.UserID, body.Content)
 	_, err = h.DB.Exec(`
-		INSERT INTO group_messages(id, group_id, sender_id, content, created_at)
+		INSERT INTO group_messages(id, group_id, from_user_id, text, created_at)
 		VALUES(?, ?, ?, ?, ?)
 	`, messageID, groupID, sess.UserID, body.Content, createdAt)
 
 	if err != nil {
+		log.Printf("Error saving group message: %v", err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -169,12 +171,141 @@ func (h *ChatHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:  createdAt,
 	}
 
-	// Send via WebSocket
+	// Send via WebSocket to all group members
 	messageBytes, _ := json.Marshal(message)
-	h.Hub.BroadcastToUser(body.RecipientID, messageBytes)
+	h.Hub.BroadcastToGroup(groupID, messageBytes)
 
 	// Return the created message
 	_ = json.NewEncoder(w).Encode(message)
+}
+
+// ListGroupMessages gets messages for a group
+func (h *ChatHandler) ListGroupMessages(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	groupID := chi.URLParam(r, "id")
+
+	// Check if user is a member of the group
+	var isMember bool
+	err := h.DB.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM group_members 
+			WHERE group_id = ? AND user_id = ?
+		) OR EXISTS(
+			SELECT 1 FROM groups 
+			WHERE id = ? AND owner_user_id = ?
+		)
+	`, groupID, sess.UserID, groupID, sess.UserID).Scan(&isMember)
+
+	if err != nil || !isMember {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Get messages for the group
+	rows, err := h.DB.Query(`
+		SELECT gm.id, gm.text, gm.from_user_id, gm.created_at,
+		       u.first_name, u.last_name
+		FROM group_messages gm
+		JOIN users u ON u.id = gm.from_user_id
+		WHERE gm.group_id = ?
+		ORDER BY gm.created_at ASC
+		LIMIT 100
+	`, groupID)
+
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type groupMessage struct {
+		ID         string `json:"id"`
+		Content    string `json:"content"`
+		SenderID   string `json:"sender_id"`
+		SenderName string `json:"sender_name"`
+		CreatedAt  string `json:"created_at"`
+		IsFromMe   bool   `json:"is_from_me"`
+	}
+
+	var messages []groupMessage
+	for rows.Next() {
+		var msg groupMessage
+		var firstName, lastName string
+
+		err := rows.Scan(&msg.ID, &msg.Content, &msg.SenderID, &msg.CreatedAt, &firstName, &lastName)
+		if err != nil {
+			continue
+		}
+
+		msg.SenderName = firstName + " " + lastName
+		msg.IsFromMe = msg.SenderID == sess.UserID
+
+		messages = append(messages, msg)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(messages)
+}
+
+// GetGroupConversations gets groups that the user can chat in
+func (h *ChatHandler) GetGroupConversations(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get groups where user is a member or owner
+	rows, err := h.DB.Query(`
+		SELECT g.id, g.title, g.description,
+		       MAX(gm.created_at) as last_message_at,
+		       0 as unread_count
+		FROM groups g
+		LEFT JOIN group_members gm_member ON g.id = gm_member.group_id AND gm_member.user_id = ?
+		LEFT JOIN group_messages gm ON g.id = gm.group_id
+		WHERE g.owner_user_id = ? OR gm_member.user_id = ?
+		GROUP BY g.id, g.title, g.description
+		ORDER BY last_message_at DESC NULLS LAST
+		LIMIT 50
+	`, sess.UserID, sess.UserID, sess.UserID)
+
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type groupConversation struct {
+		GroupID       string `json:"group_id"`
+		GroupName     string `json:"group_name"`
+		LastMessageAt string `json:"last_message_at"`
+		UnreadCount   int    `json:"unread_count"`
+	}
+
+	var conversations []groupConversation
+	for rows.Next() {
+		var c groupConversation
+		var groupTitle, groupDescription string
+		var lastMessageAt sql.NullString
+
+		err := rows.Scan(&c.GroupID, &groupTitle, &groupDescription, &lastMessageAt, &c.UnreadCount)
+		if err != nil {
+			continue
+		}
+
+		c.GroupName = groupTitle
+		c.LastMessageAt = lastMessageAt.String
+
+		conversations = append(conversations, c)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(conversations)
 }
 
 // ListDirectMessages gets direct messages between two users
@@ -229,74 +360,6 @@ func (h *ChatHandler) ListDirectMessages(w http.ResponseWriter, r *http.Request)
 		if readAt.Valid {
 			m.ReadAt = readAt.String
 		}
-
-		messages = append(messages, m)
-	}
-
-	_ = json.NewEncoder(w).Encode(messages)
-}
-
-// ListGroupMessages gets messages for a group
-func (h *ChatHandler) ListGroupMessages(w http.ResponseWriter, r *http.Request) {
-	sess, ok := auth.SessionFromContext(r)
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	groupID := chi.URLParam(r, "id")
-
-	// Check if user is a member of the group
-	var isMember bool
-	err := h.DB.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM group_members 
-			WHERE group_id = ? AND user_id = ?
-		) OR EXISTS(
-			SELECT 1 FROM groups 
-			WHERE id = ? AND owner_user_id = ?
-		)
-	`, groupID, sess.UserID, groupID, sess.UserID).Scan(&isMember)
-
-	if err != nil || !isMember {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	rows, err := h.DB.Query(`
-		SELECT gm.id, gm.sender_id, gm.content, gm.created_at,
-		       u.first_name, u.last_name
-		FROM group_messages gm
-		JOIN users u ON u.id = gm.sender_id
-		WHERE gm.group_id = ?
-		ORDER BY gm.created_at ASC
-		LIMIT 100
-	`, groupID)
-
-	if err != nil {
-		http.Error(w, "server error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	type message struct {
-		ID         string `json:"id"`
-		SenderID   string `json:"sender_id"`
-		SenderName string `json:"sender_name"`
-		Content    string `json:"content"`
-		CreatedAt  string `json:"created_at"`
-		IsFromMe   bool   `json:"is_from_me"`
-	}
-
-	var messages []message
-	for rows.Next() {
-		var m message
-		var firstName, lastName string
-
-		_ = rows.Scan(&m.ID, &m.SenderID, &m.Content, &m.CreatedAt, &firstName, &lastName)
-
-		m.SenderName = firstName + " " + lastName
-		m.IsFromMe = m.SenderID == sess.UserID
 
 		messages = append(messages, m)
 	}

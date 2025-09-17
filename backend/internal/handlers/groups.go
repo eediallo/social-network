@@ -57,16 +57,39 @@ func (h *GroupsHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.DB.Query(`
-		SELECT g.id, g.owner_user_id, g.title, g.description, g.created_at,
-		       COUNT(gm.user_id) as member_count,
-		       CASE WHEN g.owner_user_id = ? THEN 'owner' ELSE gm.role END as user_role,
-		       CASE WHEN g.owner_user_id = ? OR gm.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member
-		FROM groups g
-		LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
-		GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at, user_role, is_member
-		ORDER BY g.created_at DESC LIMIT 100
-	`, sess.UserID, sess.UserID, sess.UserID)
+	search := r.URL.Query().Get("search")
+
+	var query string
+	var args []interface{}
+
+	if search != "" {
+		query = `
+			SELECT g.id, g.owner_user_id, g.title, g.description, g.created_at,
+			       COUNT(gm.user_id) as member_count,
+			       CASE WHEN g.owner_user_id = ? THEN 'owner' ELSE gm.role END as user_role,
+			       CASE WHEN g.owner_user_id = ? OR gm.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member
+			FROM groups g
+			LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
+			WHERE g.title LIKE ? OR g.description LIKE ?
+			GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at, user_role, is_member
+			ORDER BY g.created_at DESC LIMIT 100
+		`
+		args = []interface{}{sess.UserID, sess.UserID, sess.UserID, "%" + search + "%", "%" + search + "%"}
+	} else {
+		query = `
+			SELECT g.id, g.owner_user_id, g.title, g.description, g.created_at,
+			       COUNT(gm.user_id) as member_count,
+			       CASE WHEN g.owner_user_id = ? THEN 'owner' ELSE gm.role END as user_role,
+			       CASE WHEN g.owner_user_id = ? OR gm.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member
+			FROM groups g
+			LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
+			GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at, user_role, is_member
+			ORDER BY g.created_at DESC LIMIT 100
+		`
+		args = []interface{}{sess.UserID, sess.UserID, sess.UserID}
+	}
+
+	rows, err := h.DB.Query(query, args...)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return

@@ -121,6 +121,7 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/group/{id}", chatHandler.ListGroupMessages)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/read/{messageId}", chatHandler.MarkMessageAsRead)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/conversations", chatHandler.GetConversations)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/group-conversations", chatHandler.GetGroupConversations)
 	})
 
 	groupsHandler := &handlers.GroupsHandler{DB: db}

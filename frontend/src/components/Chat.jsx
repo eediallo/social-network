@@ -14,6 +14,20 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
 
   console.log('Chat component - type:', type, 'targetId:', targetId, 'targetName:', targetName);
 
+  // Helper function to add message with deduplication
+  const addMessage = (newMessage) => {
+    setMessages(prev => {
+      // Check if message already exists to avoid duplicates
+      const exists = prev.some(msg => msg.id === newMessage.id);
+      if (exists) {
+        console.log('Message already exists, skipping duplicate:', newMessage.id);
+        return prev;
+      }
+      console.log('Adding new message:', newMessage.id);
+      return [...prev, newMessage];
+    });
+  };
+
   useEffect(() => {
     if (targetId && targetId !== 'new') {
       fetchMessages();
@@ -105,16 +119,24 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
     websocket.onopen = () => {
       setConnected(true);
       console.log('WebSocket connected successfully');
+      console.log('WebSocket ready state:', websocket.readyState);
     };
     
     websocket.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        console.log('WebSocket message received:', message);
         const messageType = type || 'direct';
+        console.log('Message type check:', message.type, '===', messageType);
+        console.log('Target ID check:', message.recipient_id, '===', targetId, 'OR', message.sender_id, '===', targetId);
+        
         if (message.type === messageType && 
             (messageType === 'group' ? message.group_id === targetId : 
              message.recipient_id === targetId || message.sender_id === targetId)) {
-          setMessages(prev => [...prev, message]);
+          console.log('Message matches criteria, adding to messages');
+          addMessage(message);
+        } else {
+          console.log('Message does not match criteria, ignoring');
         }
       } catch (err) {
         console.error('Error parsing WebSocket message:', err);
@@ -189,15 +211,17 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
         const responseData = await res.json();
         console.log('Send message response:', responseData);
         
-        // Add message to local state immediately
+        // Add message to local state immediately with the real ID from server
         const newMsg = {
-          id: responseData.id || Date.now().toString(),
+          id: responseData.id,
           content: newMessage,
-          sender_id: responseData.sender_id || 'current_user',
-          created_at: responseData.created_at || new Date().toISOString(),
+          sender_id: responseData.sender_id,
+          sender_name: responseData.sender_name || 'You',
+          recipient_id: responseData.recipient_id,
+          created_at: responseData.created_at,
           is_from_me: true
         };
-        setMessages(prev => [...prev, newMsg]);
+        addMessage(newMsg);
         setNewMessage('');
       } else {
         const errorText = await res.text();

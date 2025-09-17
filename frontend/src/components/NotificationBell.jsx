@@ -3,6 +3,8 @@ import { useNotifications } from '../context/NotificationContext';
 export default function NotificationBell() {
   const { unreadCount, toggleNotifications } = useNotifications();
 
+  console.log('NotificationBell - unreadCount:', unreadCount);
+
   return (
     <button 
       className="notification-bell"

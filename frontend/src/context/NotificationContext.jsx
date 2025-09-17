@@ -23,6 +23,8 @@ export function NotificationProvider({ children }) {
         
         // Count unread notifications
         const unread = data.filter(n => !n.read_at).length;
+        console.log('NotificationContext - Total notifications:', data.length);
+        console.log('NotificationContext - Unread notifications:', unread);
         setUnreadCount(unread);
       }
     } catch (error) {

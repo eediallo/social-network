@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -33,7 +34,12 @@ func (h *ChatHandler) SendDirectMessage(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body sendMessageReq
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" || body.RecipientID == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	if body.Content == "" || body.RecipientID == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -51,7 +57,7 @@ func (h *ChatHandler) SendDirectMessage(w http.ResponseWriter, r *http.Request) 
 
 	// Save message to database
 	_, err = h.DB.Exec(`
-		INSERT INTO direct_messages(id, sender_id, recipient_id, content, created_at)
+		INSERT INTO direct_messages(id, from_user_id, to_user_id, text, created_at)
 		VALUES(?, ?, ?, ?, ?)
 	`, messageID, sess.UserID, body.RecipientID, body.Content, createdAt)
 
@@ -60,26 +66,44 @@ func (h *ChatHandler) SendDirectMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Get sender name for the message
+	// Create notification for the recipient
+	notificationID := uuid.NewString()
+	_, _ = h.DB.Exec(`
+		INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id, created_at)
+		VALUES(?, ?, 'message', ?, ?, ?)
+	`, notificationID, body.RecipientID, sess.UserID, messageID, createdAt)
+
+	// Get sender name for WebSocket message
 	var senderName string
 	_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&senderName)
 
-	// Create message object for WebSocket
-	message := websocket.Message{
-		Type:        "direct",
-		ID:          messageID,
-		SenderID:    sess.UserID,
-		SenderName:  senderName,
-		RecipientID: body.RecipientID,
-		Content:     body.Content,
-		CreatedAt:   createdAt,
+	// Send via WebSocket to recipient
+	wsMessage := map[string]interface{}{
+		"type":         "direct",
+		"id":           messageID,
+		"sender_id":    sess.UserID,
+		"sender_name":  senderName,
+		"recipient_id": body.RecipientID,
+		"content":      body.Content,
+		"created_at":   createdAt,
 	}
 
-	// Send via WebSocket
-	h.Hub.SendMessage(message)
+	messageBytes, _ := json.Marshal(wsMessage)
+	h.Hub.BroadcastToUser(body.RecipientID, messageBytes)
 
-	// Return the created message
-	_ = json.NewEncoder(w).Encode(message)
+	// Return success response
+	response := map[string]interface{}{
+		"id":           messageID,
+		"sender_id":    sess.UserID,
+		"recipient_id": body.RecipientID,
+		"content":      body.Content,
+		"created_at":   createdAt,
+		"status":       "sent",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // SendGroupMessage sends a message to a group
@@ -145,7 +169,8 @@ func (h *ChatHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send via WebSocket
-	h.Hub.SendMessage(message)
+	messageBytes, _ := json.Marshal(message)
+	h.Hub.BroadcastToUser(body.RecipientID, messageBytes)
 
 	// Return the created message
 	_ = json.NewEncoder(w).Encode(message)
@@ -162,12 +187,12 @@ func (h *ChatHandler) ListDirectMessages(w http.ResponseWriter, r *http.Request)
 	otherUserID := chi.URLParam(r, "userId")
 
 	rows, err := h.DB.Query(`
-		SELECT dm.id, dm.sender_id, dm.recipient_id, dm.content, dm.created_at, dm.read_at,
+		SELECT dm.id, dm.from_user_id, dm.to_user_id, dm.text, dm.created_at, dm.read_at,
 		       u.first_name, u.last_name
 		FROM direct_messages dm
-		JOIN users u ON u.id = dm.sender_id
-		WHERE (dm.sender_id = ? AND dm.recipient_id = ?) 
-		   OR (dm.sender_id = ? AND dm.recipient_id = ?)
+		JOIN users u ON u.id = dm.from_user_id
+		WHERE (dm.from_user_id = ? AND dm.to_user_id = ?) 
+		   OR (dm.from_user_id = ? AND dm.to_user_id = ?)
 		ORDER BY dm.created_at ASC
 		LIMIT 100
 	`, sess.UserID, otherUserID, otherUserID, sess.UserID)
@@ -287,25 +312,93 @@ func (h *ChatHandler) MarkMessageAsRead(w http.ResponseWriter, r *http.Request) 
 	}
 
 	messageID := chi.URLParam(r, "messageId")
+	log.Printf("MarkMessageAsRead - messageID: %s, userID: %s", messageID, sess.UserID)
 
-	// Update read_at timestamp
-	_, err := h.DB.Exec(`
-		UPDATE direct_messages 
-		SET read_at = CURRENT_TIMESTAMP 
-		WHERE id = ? AND recipient_id = ?
-	`, messageID, sess.UserID)
-
+	// Check if message exists first
+	var exists bool
+	err := h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM direct_messages WHERE id = ?)", messageID).Scan(&exists)
 	if err != nil {
+		log.Printf("Error checking if message exists: %v", err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
+
+	if !exists {
+		log.Printf("Message %s does not exist", messageID)
+		http.Error(w, "message not found", http.StatusNotFound)
+		return
+	}
+
+	// Update read_at timestamp
+	result, err := h.DB.Exec(`
+		UPDATE direct_messages 
+		SET read_at = CURRENT_TIMESTAMP 
+		WHERE id = ? AND to_user_id = ?
+	`, messageID, sess.UserID)
+
+	if err != nil {
+		log.Printf("Error updating message read_at: %v", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("MarkMessageAsRead - rows affected: %d", rowsAffected)
 
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
 // GetConversations gets all conversations for the current user
 func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
-	// Simple test - just return empty array
-	conversations := []map[string]interface{}{}
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Get all unique users that the current user has had conversations with
+	rows, err := h.DB.Query(`
+		SELECT DISTINCT 
+			CASE 
+				WHEN dm.from_user_id = ? THEN dm.to_user_id
+				ELSE dm.from_user_id
+			END as other_user_id,
+			u.first_name, u.last_name,
+			MAX(dm.created_at) as last_message_at,
+			COUNT(CASE WHEN dm.to_user_id = ? AND (dm.read_at IS NULL OR dm.read_at = '') THEN 1 END) as unread_count
+		FROM direct_messages dm
+		JOIN users u ON u.id = CASE 
+			WHEN dm.from_user_id = ? THEN dm.to_user_id
+			ELSE dm.from_user_id
+		END
+		WHERE dm.from_user_id = ? OR dm.to_user_id = ?
+		GROUP BY other_user_id, u.first_name, u.last_name
+		ORDER BY last_message_at DESC
+		LIMIT 50
+	`, sess.UserID, sess.UserID, sess.UserID, sess.UserID, sess.UserID)
+
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type conversation struct {
+		UserID        string `json:"user_id"`
+		UserName      string `json:"user_name"`
+		LastMessageAt string `json:"last_message_at"`
+		LastMessage   string `json:"last_message"`
+		UnreadCount   int    `json:"unread_count"`
+	}
+
+	var conversations []conversation
+	for rows.Next() {
+		var c conversation
+		var firstName, lastName string
+		_ = rows.Scan(&c.UserID, &firstName, &lastName, &c.LastMessageAt, &c.UnreadCount)
+		c.UserName = firstName + " " + lastName
+		conversations = append(conversations, c)
+	}
+
 	_ = json.NewEncoder(w).Encode(conversations)
 }

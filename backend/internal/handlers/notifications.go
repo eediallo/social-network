@@ -29,6 +29,7 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 		         WHEN n.type = 'comment' THEN p.text
 		         WHEN n.type = 'follow_request' THEN 'Follow Request'
 		         WHEN n.type = 'follow_accepted' THEN 'Follow Accepted'
+		         WHEN n.type = 'message' THEN 'New Message'
 		         ELSE NULL
 		       END as subject_title
 		FROM notifications n
@@ -116,6 +117,9 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 		case "comment":
 			n.Message = n.ActorName + " commented on your post"
 			n.ActionURL = "/feed"
+		case "message":
+			n.Message = n.ActorName + " sent you a message"
+			n.ActionURL = "/messages?user=" + n.ActorID
 		default:
 			n.Message = "You have a new notification"
 			n.ActionURL = "/notifications"

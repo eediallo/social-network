@@ -110,6 +110,10 @@ func NewRouter(db *sql.DB) http.Handler {
 
 	// Chat API routes
 	r.Route("/api/chat", func(r chi.Router) {
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/test", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Chat API is working"))
+		})
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/direct", chatHandler.SendDirectMessage)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/direct/{userId}", chatHandler.ListDirectMessages)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/group/{id}", chatHandler.SendGroupMessage)

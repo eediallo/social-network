@@ -1,40 +1,18 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useUser } from '../context/useUser';
-import { useState, useEffect } from 'react';
+import { useNotifications } from '../context/NotificationContext';
+import NotificationBell from './NotificationBell';
 
 export default function Navbar() {
   const { user, logout } = useUser();
   const location = useLocation();
-  const [notificationCount, setNotificationCount] = useState(0);
 
   const navItems = [
     { path: '/feed', label: 'Feed', icon: '🏠' },
     { path: '/groups', label: 'Groups', icon: '👥' },
     { path: '/invitations', label: 'Invitations', icon: '📧' },
-    { path: '/notifications', label: 'Notifications', icon: '🔔', badge: notificationCount },
     { path: '/messages', label: 'Messages', icon: '💬' },
   ];
-
-  useEffect(() => {
-    // Fetch notification count
-    const fetchNotificationCount = async () => {
-      try {
-        const res = await fetch('/api/notifications', { credentials: 'include' });
-        if (res.ok) {
-          const notifications = await res.json();
-          const unreadCount = notifications.filter(n => !n.read_at).length;
-          setNotificationCount(unreadCount);
-        }
-      } catch (err) {
-        console.error('Failed to fetch notifications:', err);
-      }
-    };
-
-    fetchNotificationCount();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchNotificationCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -69,6 +47,7 @@ export default function Navbar() {
             </ul>
             
             <div className="d-flex align-center gap-2">
+              <NotificationBell />
               <Link
                 to={`/profile/${user?.id}`}
                 className="btn btn-secondary btn-sm"

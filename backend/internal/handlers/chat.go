@@ -73,9 +73,32 @@ func (h *ChatHandler) SendDirectMessage(w http.ResponseWriter, r *http.Request) 
 		VALUES(?, ?, 'message', ?, ?, ?)
 	`, notificationID, body.RecipientID, sess.UserID, messageID, createdAt)
 
-	// Get sender name for WebSocket message
+	// Get sender name for notification
 	var senderName string
 	_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&senderName)
+
+	// Create notification object for WebSocket
+	notification := map[string]interface{}{
+		"id":            notificationID,
+		"type":          "message",
+		"actor_user_id": sess.UserID,
+		"actor_name":    senderName,
+		"subject_id":    messageID,
+		"created_at":    createdAt,
+		"read_at":       "",
+		"message":       senderName + " sent you a message",
+		"action_url":    "/messages?user=" + sess.UserID,
+	}
+
+	// Create WebSocket message
+	wsNotification := map[string]interface{}{
+		"type":         "notification",
+		"notification": notification,
+	}
+
+	// Broadcast notification via WebSocket
+	notificationBytes, _ := json.Marshal(wsNotification)
+	h.Hub.BroadcastNotification(body.RecipientID, notificationBytes)
 
 	// Send via WebSocket to recipient
 	wsMessage := map[string]interface{}{

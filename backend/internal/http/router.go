@@ -107,7 +107,7 @@ func NewRouter(db *sql.DB) http.Handler {
 	go wsHub.Run() // Start the hub in a goroutine
 	wsHandler := &handlers.WSHandler{DB: db, Hub: wsHub}
 	chatHandler := &handlers.ChatHandler{DB: db, Hub: wsHub}
-	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/ws", wsHandler.Serve)
+	r.Get("/ws", wsHandler.Serve)
 
 	// Chat API routes
 	r.Route("/api/chat", func(r chi.Router) {
@@ -156,9 +156,10 @@ func NewRouter(db *sql.DB) http.Handler {
 	})
 
 	// Notifications
-	nHandler := &handlers.NotificationsHandler{DB: db}
+	nHandler := &handlers.NotificationsHandler{DB: db, Hub: wsHub}
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/notifications", nHandler.List)
-	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/notifications/read", nHandler.MarkRead)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/notifications/mark-read", nHandler.MarkRead)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/notifications/mark-all-read", nHandler.MarkAllRead)
 
 	return r
 }

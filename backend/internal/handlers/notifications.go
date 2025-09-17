@@ -6,9 +6,13 @@ import (
 	"net/http"
 
 	"social-network/backend/internal/auth"
+	"social-network/backend/internal/websocket"
 )
 
-type NotificationsHandler struct{ DB *sql.DB }
+type NotificationsHandler struct {
+	DB  *sql.DB
+	Hub *websocket.Hub
+}
 
 func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	sess, ok := auth.SessionFromContext(r)
@@ -147,4 +151,39 @@ func (h *NotificationsHandler) MarkRead(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *NotificationsHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	_, err := h.DB.Exec("UPDATE notifications SET read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND read_at IS NULL", sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// BroadcastNotification sends a notification to a user via WebSocket
+func (h *NotificationsHandler) BroadcastNotification(userID string, notification map[string]interface{}) {
+	if h.Hub == nil {
+		return
+	}
+
+	// Create the WebSocket message
+	message := map[string]interface{}{
+		"type":         "notification",
+		"notification": notification,
+	}
+
+	messageBytes, err := json.Marshal(message)
+	if err != nil {
+		return
+	}
+
+	// Broadcast to the user
+	h.Hub.BroadcastNotification(userID, messageBytes)
 }

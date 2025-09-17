@@ -99,6 +99,9 @@ func (c *Client) readPump() {
 // writePump pumps messages from the hub to the websocket connection.
 func (c *Client) writePump() {
 	defer c.conn.Close()
+	ticker := time.NewTicker(pingPeriod * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case message, ok := <-c.send:
@@ -114,14 +117,12 @@ func (c *Client) writePump() {
 			}
 			w.Write(message)
 
-			// Add queued chat messages to the current websocket message.
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
-			}
-
 			if err := w.Close(); err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait * time.Second))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		}

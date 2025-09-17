@@ -111,9 +111,12 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // Connect to backend server on port 8080, not frontend dev server
     const messageType = type || 'direct';
+    
     const wsUrl = `${protocol}//localhost:8080/ws?group=${messageType === 'group' ? targetId : ''}`;
     
     console.log('Connecting to WebSocket:', wsUrl);
+    
+    // Create WebSocket - cookies should be sent automatically
     const websocket = new WebSocket(wsUrl);
     
     websocket.onopen = () => {
@@ -124,8 +127,9 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
     
     websocket.onmessage = (event) => {
       try {
+        console.log('Raw WebSocket message:', event.data);
         const message = JSON.parse(event.data);
-        console.log('WebSocket message received:', message);
+        console.log('Parsed WebSocket message:', message);
         const messageType = type || 'direct';
         console.log('Message type check:', message.type, '===', messageType);
         console.log('Target ID check:', message.recipient_id, '===', targetId, 'OR', message.sender_id, '===', targetId);

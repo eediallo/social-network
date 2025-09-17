@@ -169,3 +169,20 @@ func (h *Hub) GetGroupClients(groupID string) []*Client {
 	}
 	return []*Client{}
 }
+
+// BroadcastNotification sends a notification to a specific user
+func (h *Hub) BroadcastNotification(userID string, notification []byte) {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	if clients, ok := h.userClients[userID]; ok {
+		for _, client := range clients {
+			select {
+			case client.send <- notification:
+				// Notification sent successfully
+			default:
+				// Client is not ready, skip
+			}
+		}
+	}
+}

@@ -18,14 +18,19 @@ import Invitations from "./pages/Invitations";
 import Notifications from "./pages/Notifications";
 import Messages from "./pages/Messages";
 import { UserProvider } from "./context/UserContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import { useUser } from "./context/useUser";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Navbar from "./components/Navbar";
+import NotificationPanel from "./components/NotificationPanel";
+import NotificationManager from "./components/NotificationManager";
 
 function App() {
   return (
     <UserProvider>
-      <AppRoutes />
+      <NotificationProvider>
+        <AppRoutes />
+      </NotificationProvider>
     </UserProvider>
   );
 }
@@ -71,6 +76,8 @@ function AppRoutes() {
     <Router>
       <div className="app-container">
         {isAuthenticated && <Navbar />}
+        {isAuthenticated && <NotificationPanel />}
+        {isAuthenticated && <NotificationManager />}
         <main className="flex-1">
           <Routes>
             <Route 

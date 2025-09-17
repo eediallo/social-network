@@ -7,11 +7,15 @@ import (
 	"time"
 
 	"social-network/backend/internal/auth"
+	"social-network/backend/internal/services"
 
 	"github.com/google/uuid"
 )
 
-type PostsHandler struct{ DB *sql.DB }
+type PostsHandler struct {
+	DB                  *sql.DB
+	NotificationService *services.NotificationService
+}
 
 type createPostRequest struct {
 	Text    string   `json:"text"`
@@ -223,9 +227,16 @@ func (h *PostsHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 	// Notify post owner if commenter is not the owner
 	var postOwnerID string
 	err = h.DB.QueryRow("SELECT user_id FROM posts WHERE id = ?", postID).Scan(&postOwnerID)
-	if err == nil && postOwnerID != sess.UserID {
-		notifID := uuid.NewString()
-		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id, created_at) VALUES(?,?,?,?,?,?)", notifID, postOwnerID, "comment", sess.UserID, postID, time.Now())
+	if err == nil && postOwnerID != sess.UserID && h.NotificationService != nil {
+		// Get commenter name
+		var commenterName string
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&commenterName)
+		if commenterName == "" {
+			commenterName = "Someone"
+		}
+
+		message := commenterName + " commented on your post"
+		h.NotificationService.CreatePostNotification(sess.UserID, postID, postOwnerID, "comment", message)
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id})
 }

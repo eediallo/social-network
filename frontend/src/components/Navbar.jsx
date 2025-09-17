@@ -8,10 +8,10 @@ export default function Navbar() {
   const location = useLocation();
 
   const navItems = [
-    { path: '/feed', label: 'Feed', icon: '🏠' },
-    { path: '/groups', label: 'Groups', icon: '👥' },
-    { path: '/invitations', label: 'Invitations', icon: '📧' },
-    { path: '/messages', label: 'Messages', icon: '💬' },
+    { path: '/feed', label: '', icon: '🏠' },
+    { path: '/groups', label: '', icon: '👥' },
+    { path: '/invitations', label: '', icon: '📧' },
+    { path: '/messages', label: '', icon: '💬' },
   ];
 
   const handleLogout = async () => {

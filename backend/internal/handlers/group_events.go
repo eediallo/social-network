@@ -7,12 +7,16 @@ import (
 	"time"
 
 	"social-network/backend/internal/auth"
+	"social-network/backend/internal/services"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type GroupEventsHandler struct{ DB *sql.DB }
+type GroupEventsHandler struct {
+	DB                  *sql.DB
+	NotificationService *services.NotificationService
+}
 
 type createEventReq struct {
 	Title       string `json:"title"`
@@ -247,26 +251,27 @@ func (h *GroupEventsHandler) GetEventResponses(w http.ResponseWriter, r *http.Re
 
 // Helper function to notify group members about new events
 func (h *GroupEventsHandler) notifyGroupMembers(groupID, creatorID, eventType, subjectID string) {
-	// Get all group members except the creator
-	rows, err := h.DB.Query(`
-		SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?
-		UNION
-		SELECT owner_user_id FROM groups WHERE id = ? AND owner_user_id != ?
-	`, groupID, creatorID, groupID, creatorID)
-
-	if err != nil {
+	if h.NotificationService == nil {
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var userID string
-		_ = rows.Scan(&userID)
-		_, _ = h.DB.Exec(`
-			INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id)
-			VALUES(?, ?, ?, ?, ?)
-		`, uuid.NewString(), userID, eventType, creatorID, subjectID)
+	// Get group title and creator name
+	var groupTitle, creatorName string
+	_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", groupID).Scan(&groupTitle)
+	_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", creatorID).Scan(&creatorName)
+	if creatorName == "" {
+		creatorName = "Someone"
 	}
+
+	var message string
+	switch eventType {
+	case "group_event_created":
+		message = creatorName + " created a new event in " + groupTitle
+	case "group_event_updated":
+		message = creatorName + " updated an event in " + groupTitle
+	}
+
+	h.NotificationService.CreateEventNotification(creatorID, subjectID, groupID, eventType, message)
 }
 
 // Helper function to notify event creator about responses

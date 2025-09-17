@@ -6,12 +6,16 @@ import (
 	"net/http"
 
 	"social-network/backend/internal/auth"
+	"social-network/backend/internal/services"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-type GroupsHandler struct{ DB *sql.DB }
+type GroupsHandler struct {
+	DB                  *sql.DB
+	NotificationService *services.NotificationService
+}
 
 type createGroupReq struct{ Title, Description string }
 
@@ -37,6 +41,19 @@ func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	// Get the actual created timestamp from the database
 	var createdAt string
 	_ = h.DB.QueryRow("SELECT created_at FROM groups WHERE id = ?", gid).Scan(&createdAt)
+
+	// Create notification for group creation (if notification service is available)
+	if h.NotificationService != nil {
+		// Get actor name
+		var actorName string
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&actorName)
+		if actorName == "" {
+			actorName = "Someone"
+		}
+
+		message := actorName + " created a new group: " + body.Title
+		h.NotificationService.CreateGroupActivityNotification(sess.UserID, gid, "group_created", message)
+	}
 
 	// Return the complete group data
 	groupData := map[string]interface{}{
@@ -202,8 +219,17 @@ func (h *GroupsHandler) RequestJoin(w http.ResponseWriter, r *http.Request) {
 	// notify group owner
 	var owner string
 	_ = h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&owner)
-	if owner != "" {
-		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), owner, "group_join_request", sess.UserID, gid)
+	if owner != "" && h.NotificationService != nil {
+		// Get group title and actor name
+		var groupTitle, actorName string
+		_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", gid).Scan(&groupTitle)
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&actorName)
+		if actorName == "" {
+			actorName = "Someone"
+		}
+
+		message := actorName + " wants to join " + groupTitle
+		h.NotificationService.CreateFollowNotification(sess.UserID, owner, "group_join_request", message)
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": rid, "status": "pending"})
 }
@@ -551,13 +577,33 @@ func (h *GroupsHandler) HandleJoinRequest(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		// Notify the user that their request was accepted
-		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)",
-			uuid.NewString(), userID, "group_join_accepted", sess.UserID, gid)
+		// Create notification for join acceptance
+		if h.NotificationService != nil {
+			// Get group title and actor name
+			var groupTitle, actorName string
+			_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", gid).Scan(&groupTitle)
+			_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&actorName)
+			if actorName == "" {
+				actorName = "Group Owner"
+			}
+
+			message := actorName + " accepted your request to join " + groupTitle
+			h.NotificationService.CreateFollowNotification(sess.UserID, userID, "group_join_accepted", message)
+		}
 	} else {
-		// Notify the user that their request was declined
-		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)",
-			uuid.NewString(), userID, "group_join_declined", sess.UserID, gid)
+		// Create notification for join decline
+		if h.NotificationService != nil {
+			// Get group title and actor name
+			var groupTitle, actorName string
+			_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", gid).Scan(&groupTitle)
+			_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&actorName)
+			if actorName == "" {
+				actorName = "Group Owner"
+			}
+
+			message := actorName + " declined your request to join " + groupTitle
+			h.NotificationService.CreateFollowNotification(sess.UserID, userID, "group_join_declined", message)
+		}
 	}
 
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": newStatus})

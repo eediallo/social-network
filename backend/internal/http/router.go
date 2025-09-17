@@ -67,10 +67,15 @@ func NewRouter(db *sql.DB) http.Handler {
 		log.Printf("Cloudinary service initialized successfully")
 	}
 
+	// WebSocket and Notification Service (needed early)
+	wsHub := ws.NewHub()
+	go wsHub.Run() // Start the hub in a goroutine
+	notificationService := services.NewNotificationService(db, wsHub)
+
 	imagesHandler := &handlers.ImagesHandler{DB: db, CloudinarySvc: cloudinarySvc}
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/avatar", imagesHandler.UploadAvatar)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/post", imagesHandler.UploadPostImage)
-	postsHandler := &handlers.PostsHandler{DB: db}
+	postsHandler := &handlers.PostsHandler{DB: db, NotificationService: notificationService}
 	// Static file serving for images
 	r.Get("/images/{filename}", func(w http.ResponseWriter, r *http.Request) {
 		filename := chi.URLParam(r, "filename")
@@ -87,7 +92,7 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/comments", postsHandler.AddComment)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/comments", postsHandler.ListComments)
 
-	followHandler := &handlers.FollowHandler{DB: db}
+	followHandler := &handlers.FollowHandler{DB: db, NotificationService: notificationService}
 	r.Route("/api/follow", func(r chi.Router) {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/requests/{toUserID}", followHandler.SendRequest)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/requests/{id}/accept", followHandler.AcceptRequest)
@@ -102,11 +107,8 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Patch("/api/me/profile/privacy", profileHandler.TogglePrivacy)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Patch("/api/me/profile", profileHandler.UpdateProfile)
 
-	// WebSocket
-	wsHub := ws.NewHub()
-	go wsHub.Run() // Start the hub in a goroutine
 	wsHandler := &handlers.WSHandler{DB: db, Hub: wsHub}
-	chatHandler := &handlers.ChatHandler{DB: db, Hub: wsHub}
+	chatHandler := &handlers.ChatHandler{DB: db, Hub: wsHub, NotificationService: notificationService}
 	r.Get("/ws", wsHandler.Serve)
 
 	// Chat API routes
@@ -114,6 +116,25 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/test", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Chat API is working"))
+		})
+
+		// Test notification service
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/test-notification", func(w http.ResponseWriter, r *http.Request) {
+			sess, ok := auth.SessionFromContext(r)
+			if !ok {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			// Test the notification service
+			err := chatHandler.NotificationService.CreateGroupActivityNotification(sess.UserID, "test-group-id", "group_message", "Test notification message")
+			if err != nil {
+				http.Error(w, "Error creating notification: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Test notification created successfully"))
 		})
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/direct", chatHandler.SendDirectMessage)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/direct/{userId}", chatHandler.ListDirectMessages)
@@ -124,8 +145,8 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/group-conversations", chatHandler.GetGroupConversations)
 	})
 
-	groupsHandler := &handlers.GroupsHandler{DB: db}
-	groupEventsHandler := &handlers.GroupEventsHandler{DB: db}
+	groupsHandler := &handlers.GroupsHandler{DB: db, NotificationService: notificationService}
+	groupEventsHandler := &handlers.GroupEventsHandler{DB: db, NotificationService: notificationService}
 	r.Route("/api/groups", func(r chi.Router) {
 		r.Get("/", groupsHandler.ListGroups)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/", groupsHandler.CreateGroup)

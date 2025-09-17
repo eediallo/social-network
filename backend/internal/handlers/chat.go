@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"social-network/backend/internal/auth"
+	"social-network/backend/internal/services"
 	"social-network/backend/internal/websocket"
 
 	"github.com/go-chi/chi/v5"
@@ -15,8 +16,9 @@ import (
 )
 
 type ChatHandler struct {
-	DB  *sql.DB
-	Hub *websocket.Hub
+	DB                  *sql.DB
+	Hub                 *websocket.Hub
+	NotificationService *services.NotificationService
 }
 
 type sendMessageReq struct {
@@ -198,8 +200,58 @@ func (h *ChatHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 	messageBytes, _ := json.Marshal(message)
 	h.Hub.BroadcastToGroup(groupID, messageBytes)
 
+	// Create notification for group message
+	if h.NotificationService != nil {
+		// Get group title
+		var groupTitle string
+		_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", groupID).Scan(&groupTitle)
+
+		notificationMessage := senderName + " sent a message in " + groupTitle
+		err := h.NotificationService.CreateGroupActivityNotification(sess.UserID, groupID, "group_message", notificationMessage)
+		if err != nil {
+			log.Printf("Error creating group message notification: %v", err)
+		}
+	} else {
+		// Fallback: Create notifications directly without the service
+		log.Printf("NotificationService is nil, creating notifications directly")
+
+		// Get all group members
+		rows, err := h.DB.Query(`
+			SELECT user_id FROM group_members WHERE group_id = ?
+			UNION
+			SELECT owner_user_id as user_id FROM groups WHERE id = ?
+		`, groupID, groupID)
+
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var userID string
+				if err := rows.Scan(&userID); err != nil {
+					continue
+				}
+
+				// Skip the actor themselves
+				if userID == sess.UserID {
+					continue
+				}
+
+				// Create notification directly
+				_, err = h.DB.Exec(`
+					INSERT INTO notifications (type, actor_user_id, subject_id, user_id, created_at)
+					VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+				`, "group_message", sess.UserID, groupID, userID)
+
+				if err != nil {
+					log.Printf("Error creating direct notification for user %s: %v", userID, err)
+				}
+			}
+		}
+	}
+
 	// Return the created message
+	log.Printf("Sending group message response")
 	_ = json.NewEncoder(w).Encode(message)
+	log.Printf("Group message function completed successfully")
 }
 
 // ListGroupMessages gets messages for a group

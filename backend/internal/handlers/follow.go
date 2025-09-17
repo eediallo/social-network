@@ -6,13 +6,15 @@ import (
 	"net/http"
 
 	"social-network/backend/internal/auth"
+	"social-network/backend/internal/services"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 type FollowHandler struct {
-	DB *sql.DB
+	DB                  *sql.DB
+	NotificationService *services.NotificationService
 }
 
 func (h *FollowHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +50,17 @@ func (h *FollowHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// notify target user of follow request
-	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), toUserID, "follow_request", sess.UserID, id)
+	if h.NotificationService != nil {
+		// Get requester name
+		var requesterName string
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&requesterName)
+		if requesterName == "" {
+			requesterName = "Someone"
+		}
+
+		message := requesterName + " wants to follow you"
+		h.NotificationService.CreateFollowNotification(sess.UserID, toUserID, "follow_request", message)
+	}
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id, "status": "pending"})
 }
@@ -69,7 +81,17 @@ func (h *FollowHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
 	_, _ = h.DB.Exec("INSERT OR IGNORE INTO follows(follower_user_id, followed_user_id) VALUES(?,?)", fromID, toID)
 	_, _ = h.DB.Exec("UPDATE follow_requests SET status = 'accepted' WHERE id = ?", reqID)
 	// notify requester of acceptance
-	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), fromID, "follow_accepted", toID, reqID)
+	if h.NotificationService != nil {
+		// Get accepter name
+		var accepterName string
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", toID).Scan(&accepterName)
+		if accepterName == "" {
+			accepterName = "Someone"
+		}
+
+		message := accepterName + " accepted your follow request"
+		h.NotificationService.CreateFollowNotification(toID, fromID, "follow_accepted", message)
+	}
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
 }

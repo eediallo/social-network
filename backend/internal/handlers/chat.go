@@ -95,6 +95,7 @@ func (h *ChatHandler) SendDirectMessage(w http.ResponseWriter, r *http.Request) 
 	response := map[string]interface{}{
 		"id":           messageID,
 		"sender_id":    sess.UserID,
+		"sender_name":  senderName,
 		"recipient_id": body.RecipientID,
 		"content":      body.Content,
 		"created_at":   createdAt,

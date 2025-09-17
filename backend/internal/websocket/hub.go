@@ -124,6 +124,7 @@ func (h *Hub) BroadcastToUser(userID string, message []byte) {
 		for _, client := range clients {
 			select {
 			case client.send <- message:
+				// Message sent successfully
 			default:
 				// Client is not ready, skip
 			}

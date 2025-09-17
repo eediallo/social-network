@@ -198,3 +198,41 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewEncoder(w).Encode(following)
 }
+
+func (h *FollowHandler) ListRequests(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	rows, err := h.DB.Query(`
+		SELECT fr.id, u.id as user_id, u.first_name, u.last_name, u.email, fr.created_at
+		FROM follow_requests fr
+		JOIN users u ON u.id = fr.from_user_id
+		WHERE fr.to_user_id = ? AND fr.status = 'pending'
+		ORDER BY fr.created_at DESC`, sess.UserID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	type followRequest struct {
+		ID        string `json:"id"`
+		UserID    string `json:"user_id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Email     string `json:"email"`
+		CreatedAt string `json:"created_at"`
+	}
+	var requests []followRequest
+	for rows.Next() {
+		var req followRequest
+		_ = rows.Scan(&req.ID, &req.UserID, &req.FirstName, &req.LastName, &req.Email, &req.CreatedAt)
+		requests = append(requests, req)
+	}
+	// Ensure we always return an array, even if empty
+	if requests == nil {
+		requests = []followRequest{}
+	}
+	_ = json.NewEncoder(w).Encode(requests)
+}

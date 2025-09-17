@@ -17,6 +17,7 @@ import GroupDetail from "./pages/GroupDetail";
 import Invitations from "./pages/Invitations";
 import Notifications from "./pages/Notifications";
 import Messages from "./pages/Messages";
+import Requests from "./pages/Requests";
 import { UserProvider } from "./context/UserContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { useUser } from "./context/useUser";
@@ -155,6 +156,14 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <Messages />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/requests"
+              element={
+                <ProtectedRoute>
+                  <Requests />
                 </ProtectedRoute>
               }
             />

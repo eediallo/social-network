@@ -211,11 +211,59 @@ func (h *GroupsHandler) RequestJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	gid := chi.URLParam(r, "id")
-	rid := uuid.NewString()
-	if _, err := h.DB.Exec("INSERT INTO group_requests(id, group_id, user_id, status) VALUES(?,?,?, 'pending')", rid, gid, sess.UserID); err != nil {
-		http.Error(w, "conflict", http.StatusConflict)
+
+	// Check if user is already a member of the group
+	var isMember bool
+	err := h.DB.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM group_members 
+			WHERE group_id = ? AND user_id = ?
+		) OR EXISTS(
+			SELECT 1 FROM groups 
+			WHERE id = ? AND owner_user_id = ?
+		)
+	`, gid, sess.UserID, gid, sess.UserID).Scan(&isMember)
+
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
+
+	if isMember {
+		http.Error(w, "already a member", http.StatusConflict)
+		return
+	}
+
+	// Check if there's already a pending request
+	var existingStatus string
+	err = h.DB.QueryRow("SELECT status FROM group_requests WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&existingStatus)
+
+	if err == nil {
+		// Request exists
+		if existingStatus == "pending" {
+			http.Error(w, "request already pending", http.StatusConflict)
+			return
+		} else if existingStatus == "accepted" {
+			http.Error(w, "already a member", http.StatusConflict)
+			return
+		} else if existingStatus == "declined" {
+			// Allow resubmitting a declined request
+			_, err = h.DB.Exec("UPDATE group_requests SET status = 'pending', created_at = CURRENT_TIMESTAMP WHERE group_id = ? AND user_id = ?", gid, sess.UserID)
+			if err != nil {
+				http.Error(w, "server error", http.StatusInternalServerError)
+				return
+			}
+		}
+	} else {
+		// No existing request, create new one
+		rid := uuid.NewString()
+		_, err = h.DB.Exec("INSERT INTO group_requests(id, group_id, user_id, status) VALUES(?,?,?, 'pending')", rid, gid, sess.UserID)
+		if err != nil {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	// notify group owner
 	var owner string
 	_ = h.DB.QueryRow("SELECT owner_user_id FROM groups WHERE id = ?", gid).Scan(&owner)
@@ -231,7 +279,7 @@ func (h *GroupsHandler) RequestJoin(w http.ResponseWriter, r *http.Request) {
 		message := actorName + " wants to join " + groupTitle
 		h.NotificationService.CreateFollowNotification(sess.UserID, owner, "group_join_request", message)
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"id": rid, "status": "pending"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending"})
 }
 
 func (h *GroupsHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {

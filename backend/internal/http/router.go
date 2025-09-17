@@ -100,6 +100,7 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/{userID}", followHandler.Unfollow)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/followers", followHandler.ListFollowers)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/following", followHandler.ListFollowing)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/requests", followHandler.ListRequests)
 	})
 
 	profileHandler := &handlers.ProfileHandler{DB: db}

@@ -125,9 +125,9 @@ func (ns *NotificationService) CreateFollowNotification(actorUserID, targetUserI
 	var actionURL string
 	switch notificationType {
 	case "follow_request":
-		actionURL = "/profile"
+		actionURL = "/requests" // Go to requests management page
 	case "follow_accepted":
-		actionURL = "/profile"
+		actionURL = "/profile/" + actorUserID // Go to the person who accepted
 	}
 
 	data := NotificationData{
@@ -147,9 +147,9 @@ func (ns *NotificationService) CreatePostNotification(actorUserID, postID, targe
 	var actionURL string
 	switch notificationType {
 	case "comment":
-		actionURL = "/feed"
+		actionURL = "/feed?post=" + postID // Go to specific post in feed
 	case "like":
-		actionURL = "/feed"
+		actionURL = "/feed?post=" + postID // Go to specific post in feed
 	}
 
 	data := NotificationData{
@@ -169,17 +169,17 @@ func (ns *NotificationService) CreateGroupActivityNotification(actorUserID, grou
 	var actionURL string
 	switch notificationType {
 	case "group_created":
-		actionURL = "/groups/" + groupID
+		actionURL = "/groups/" + groupID // Go to the new group
 	case "group_message":
-		actionURL = "/messages"
+		actionURL = "/messages?group=" + groupID // Go to group chat
 	case "group_event_created":
-		actionURL = "/groups/" + groupID
+		actionURL = "/groups/" + groupID + "?tab=events" // Go to group events tab
 	case "group_join_request":
-		actionURL = "/groups/" + groupID + "?tab=requests"
+		actionURL = "/groups/" + groupID + "?tab=requests" // Go to group requests management
 	case "group_join_accepted":
-		actionURL = "/groups/" + groupID
+		actionURL = "/groups/" + groupID // Go to the group
 	case "group_invite":
-		actionURL = "/invitations"
+		actionURL = "/invitations" // Go to invitations page
 	}
 
 	data := NotificationData{
@@ -199,11 +199,11 @@ func (ns *NotificationService) CreateEventNotification(actorUserID, eventID, gro
 	var actionURL string
 	switch notificationType {
 	case "event_created":
-		actionURL = "/groups/" + groupID
+		actionURL = "/groups/" + groupID + "?tab=events" // Go to group events tab
 	case "event_updated":
-		actionURL = "/groups/" + groupID
+		actionURL = "/groups/" + groupID + "?tab=events" // Go to group events tab
 	case "event_response":
-		actionURL = "/groups/" + groupID
+		actionURL = "/groups/" + groupID + "?tab=events" // Go to group events tab
 	}
 
 	data := NotificationData{

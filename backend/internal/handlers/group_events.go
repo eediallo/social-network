@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -271,7 +272,40 @@ func (h *GroupEventsHandler) notifyGroupMembers(groupID, creatorID, eventType, s
 		message = creatorName + " updated an event in " + groupTitle
 	}
 
-	h.NotificationService.CreateEventNotification(creatorID, subjectID, groupID, eventType, message)
+	// Get all group members except the creator
+	rows, err := h.DB.Query(`
+		SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?
+		UNION
+		SELECT owner_user_id as user_id FROM groups WHERE id = ? AND owner_user_id != ?
+	`, groupID, creatorID, groupID, creatorID)
+
+	if err != nil {
+		log.Printf("Error getting group members for event notification: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	// Create notifications for each group member (excluding creator)
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			continue
+		}
+
+		// Create notification for this user
+		data := services.NotificationData{
+			Type:        eventType,
+			ActorUserID: creatorID,
+			SubjectID:   subjectID,
+			UserID:      userID,
+			Message:     message,
+			ActionURL:   "/groups/" + groupID + "?tab=events",
+		}
+
+		if err := h.NotificationService.CreateNotification(data); err != nil {
+			log.Printf("Error creating event notification for user %s: %v", userID, err)
+		}
+	}
 }
 
 // Helper function to notify event creator about responses

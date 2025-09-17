@@ -461,6 +461,8 @@ func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 		var firstName, lastName string
 		_ = rows.Scan(&c.UserID, &firstName, &lastName, &c.LastMessageAt, &c.UnreadCount)
 		c.UserName = firstName + " " + lastName
+		// For now, we'll set a default message since getting the last message text is complex
+		c.LastMessage = "Message sent"
 		conversations = append(conversations, c)
 	}
 

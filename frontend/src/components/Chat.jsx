@@ -284,6 +284,12 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
               className={`message ${message.is_from_me ? 'message-sent' : 'message-received'}`}
             >
               <div className="message-content">
+                {/* Show sender name for group messages */}
+                {type === 'group' && !message.is_from_me && (
+                  <div className="message-sender">
+                    {message.sender_name || 'Unknown User'}
+                  </div>
+                )}
                 <div className="message-text">{message.content}</div>
                 <div className="message-time">
                   {formatRelativeTime(message.created_at)}

@@ -3598,6 +3598,15 @@
   line-height: 1;
 }
 
+/* Message Sender */
+.message-sender {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+  opacity: 0.8;
+}
+
 /* Hide floating button on mobile when sidebar is visible */
 @media (max-width: 768px) {
   .floating-action-btn {

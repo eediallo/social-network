@@ -186,7 +186,7 @@ func (h *ChatHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 	_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&senderName)
 
 	// Create notifications immediately after saving the message
-	// Get all group members and create notifications
+	// Get all group members and create notifications in a single batch
 	rows, err := h.DB.Query(`
 		SELECT user_id FROM group_members WHERE group_id = ?
 		UNION
@@ -195,6 +195,9 @@ func (h *ChatHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 
 	if err == nil {
 		defer rows.Close()
+
+		// Collect all user IDs first
+		var userIDs []string
 		for rows.Next() {
 			var userID string
 			if err := rows.Scan(&userID); err != nil {
@@ -206,14 +209,33 @@ func (h *ChatHandler) SendGroupMessage(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Create notification directly
-			_, err = h.DB.Exec(`
-				INSERT INTO notifications (type, actor_user_id, subject_id, user_id, created_at)
-				VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-			`, "group_message", sess.UserID, groupID, userID)
+			userIDs = append(userIDs, userID)
+		}
 
-			if err != nil {
-				log.Printf("Error creating group message notification for user %s: %v", userID, err)
+		// Create notifications in a single batch operation
+		if len(userIDs) > 0 {
+			// Use a transaction to avoid database locking
+			tx, err := h.DB.Begin()
+			if err == nil {
+				stmt, err := tx.Prepare(`
+					INSERT INTO notifications (type, actor_user_id, subject_id, user_id, created_at)
+					VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+				`)
+				if err == nil {
+					for _, userID := range userIDs {
+						_, err = stmt.Exec("group_message", sess.UserID, groupID, userID)
+						if err != nil {
+							log.Printf("Error creating group message notification for user %s: %v", userID, err)
+						}
+					}
+					stmt.Close()
+					tx.Commit()
+				} else {
+					tx.Rollback()
+					log.Printf("Error preparing notification statement: %v", err)
+				}
+			} else {
+				log.Printf("Error starting transaction for notifications: %v", err)
 			}
 		}
 	}

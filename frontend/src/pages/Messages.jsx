@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Conversations from '../components/Conversations';
 import Chat from '../components/Chat';
 
 export default function Messages() {
   const [selectedChat, setSelectedChat] = useState(null);
+  const [searchParams] = useSearchParams();
 
   const handleSelectConversation = (conversation) => {
     setSelectedChat(conversation);
@@ -12,6 +14,19 @@ export default function Messages() {
   const handleCloseChat = () => {
     setSelectedChat(null);
   };
+
+  // Handle URL parameters for opening specific chats
+  useEffect(() => {
+    const userId = searchParams.get('user');
+    if (userId) {
+      // Open a direct message with the specified user
+      setSelectedChat({
+        type: 'direct',
+        id: userId,
+        name: 'User' // This will be updated when we fetch user details
+      });
+    }
+  }, [searchParams]);
 
   return (
     <div className="messages-page">

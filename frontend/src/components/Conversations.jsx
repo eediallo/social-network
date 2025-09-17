@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUser } from '../context/useUser';
 import { getInitials } from '../utils/avatarUtils';
 import { formatRelativeTime } from '../utils/dateUtils';
+import API_BASE_URL from '../config/api';
 
 export default function Conversations({ onSelectConversation }) {
   const { user, isAuthenticated } = useUser();
@@ -24,7 +25,7 @@ export default function Conversations({ onSelectConversation }) {
       setLoading(true);
       setError('');
       console.log('Fetching conversations...');
-      const res = await fetch('/api/chat/conversations', { credentials: 'include' });
+      const res = await fetch(`${API_BASE_URL}/api/chat/conversations`, { credentials: 'include' });
       
       console.log('Conversations response status:', res.status);
       if (res.ok) {
@@ -46,7 +47,7 @@ export default function Conversations({ onSelectConversation }) {
 
   const handleConversationClick = (conversation) => {
     onSelectConversation({
-      type: conversation.type,
+      type: 'direct', // All conversations from this list are direct messages
       id: conversation.user_id,
       name: conversation.user_name
     });
@@ -120,11 +121,11 @@ export default function Conversations({ onSelectConversation }) {
                 <div className="conversation-header">
                   <h4 className="conversation-name">{conversation.user_name}</h4>
                   <span className="conversation-time">
-                    {formatRelativeTime(conversation.last_message_time)}
+                    {formatRelativeTime(conversation.last_message_at)}
                   </span>
                 </div>
                 <div className="conversation-preview">
-                  <p className="conversation-message">{conversation.last_message}</p>
+                  <p className="conversation-message">{conversation.last_message || 'No messages yet'}</p>
                   {conversation.unread_count > 0 && (
                     <span className="conversation-unread">
                       {conversation.unread_count}

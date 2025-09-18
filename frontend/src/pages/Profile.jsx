@@ -205,7 +205,7 @@ export default function Profile() {
                 ...prev,
                 followers_count: prev.followers_count + 1
               }));
-            } else if (data.status === 'requested') {
+            } else if (data.status === 'pending') {
               // Follow request sent (private profile)
               setFollowRequestSent(true);
               alert('Follow request sent! You will be notified when they respond.');

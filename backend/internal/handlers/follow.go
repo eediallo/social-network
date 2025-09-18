@@ -90,7 +90,7 @@ func (h *FollowHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
 		}
 
 		message := accepterName + " accepted your follow request"
-		h.NotificationService.CreateFollowNotification(toID, fromID, "follow_accepted", message)
+		h.NotificationService.CreateFollowNotification(fromID, toID, "follow_accepted", message)
 	}
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})

@@ -12,9 +12,9 @@ export default function GroupPostComposer({ groupId, onPostCreated }) {
   const uploadImage = async (image, postId) => {
     const formData = new FormData();
     formData.append('image', image.file);
-    formData.append('post_id', postId);
+    formData.append('group_post_id', postId);
 
-    const res = await fetch('/api/images/post', {
+    const res = await fetch('/api/images/group_post', {
       method: 'POST',
       body: formData,
       credentials: 'include'

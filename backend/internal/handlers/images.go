@@ -157,3 +157,80 @@ func (h *ImagesHandler) UploadPostImage(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+func (h *ImagesHandler) UploadGroupPostImage(w http.ResponseWriter, r *http.Request) {
+	_, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	r.ParseMultipartForm(10 << 20) // 10MB max
+	file, handler, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	if !allowedImageTypes[handler.Header.Get("Content-Type")] {
+		http.Error(w, "unsupported file type", http.StatusBadRequest)
+		return
+	}
+
+	groupPostID := r.FormValue("group_post_id")
+	if groupPostID == "" {
+		http.Error(w, "group_post_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if Cloudinary service is available
+	if h.CloudinarySvc == nil {
+		log.Printf("Cloudinary service is nil - falling back to local storage")
+		http.Error(w, "Cloudinary not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Upload to Cloudinary
+	log.Printf("Attempting to upload image to Cloudinary for group post: %s", groupPostID)
+	result, err := h.CloudinarySvc.UploadGroupPostImage(r.Context(), file, groupPostID)
+	if err != nil {
+		log.Printf("Cloudinary upload error: %v", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Cloudinary upload successful: %+v", result)
+
+	// Update database with Cloudinary data
+	imageID := uuid.NewString()
+	_, err = h.DB.Exec(`
+		INSERT INTO group_post_images(
+			id, group_post_id, path, mime, 
+			cloudinary_public_id, cloudinary_url, cloudinary_secure_url,
+			width, height, format
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		imageID, groupPostID, result.PublicID, result.Format,
+		result.PublicID, result.URL, result.SecureURL,
+		result.Width, result.Height, result.Format)
+
+	if err != nil {
+		log.Printf("DB error: %v", err)
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Return Cloudinary data
+	response := map[string]interface{}{
+		"id":         imageID,
+		"public_id":  result.PublicID,
+		"url":        result.URL,
+		"secure_url": result.SecureURL,
+		"width":      result.Width,
+		"height":     result.Height,
+		"format":     result.Format,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}

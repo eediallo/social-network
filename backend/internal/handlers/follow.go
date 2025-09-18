@@ -59,7 +59,7 @@ func (h *FollowHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		}
 
 		message := requesterName + " wants to follow you"
-		h.NotificationService.CreateFollowNotification(sess.UserID, toUserID, "follow_request", message)
+		h.NotificationService.CreateFollowNotification(toUserID, sess.UserID, "follow_request", message)
 	}
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id, "status": "pending"})

@@ -11,6 +11,7 @@ export default function Navbar() {
     { path: '/feed', label: '', icon: '🏠' },
     { path: '/groups', label: '', icon: '👥' },
     { path: '/invitations', label: '', icon: '📧' },
+    { path: '/requests', label: '', icon: '👤' },
     { path: '/messages', label: '', icon: '💬' },
   ];
 

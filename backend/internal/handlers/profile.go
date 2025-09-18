@@ -25,11 +25,11 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	userID := chi.URLParam(r, "id")
 	var public int
-	var nickname, about, avatar sql.NullString
+	var nickname, about, avatar, cloudinaryAvatarUrl sql.NullString
 	var first, last, email sql.NullString
 	var dob sql.NullString
-	if err := h.DB.QueryRow(`SELECT p.public, p.nickname, p.about, p.avatar_path, u.first_name, u.last_name, u.email, u.date_of_birth
-		FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ?`, userID).Scan(&public, &nickname, &about, &avatar, &first, &last, &email, &dob); err != nil {
+	if err := h.DB.QueryRow(`SELECT p.public, p.nickname, p.about, p.avatar_path, p.cloudinary_avatar_secure_url, u.first_name, u.last_name, u.email, u.date_of_birth
+		FROM profiles p JOIN users u ON u.id = p.user_id WHERE p.user_id = ?`, userID).Scan(&public, &nickname, &about, &avatar, &cloudinaryAvatarUrl, &first, &last, &email, &dob); err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -57,6 +57,7 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		"nickname":        nickname.String,
 		"about":           about.String,
 		"avatar_path":     avatar.String,
+		"avatar_url":      cloudinaryAvatarUrl.String,
 		"first_name":      first.String,
 		"last_name":       last.String,
 		"followers_count": followersCount,
@@ -117,4 +118,24 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// GetUserInfo returns basic user information (for private profiles)
+func (h *ProfileHandler) GetUserInfo(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	var first, last, nickname sql.NullString
+	if err := h.DB.QueryRow(`SELECT u.first_name, u.last_name, p.nickname
+		FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id = ?`, userID).Scan(&first, &last, &nickname); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	out := map[string]any{
+		"id":         userID,
+		"first_name": first.String,
+		"last_name":  last.String,
+		"nickname":   nickname.String,
+	}
+
+	_ = json.NewEncoder(w).Encode(out)
 }

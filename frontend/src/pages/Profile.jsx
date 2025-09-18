@@ -17,6 +17,7 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
   const [followRequestSent, setFollowRequestSent] = useState(false);
+  const [isPrivateProfile, setIsPrivateProfile] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
@@ -27,6 +28,7 @@ export default function Profile() {
     about: ''
   });
   const [editLoading, setEditLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
 
   const isOwnProfile = currentUser?.id === id;
 
@@ -56,8 +58,10 @@ export default function Profile() {
         const data = await res.json();
         setProfile(data);
         setIsFollowing(data.is_following);
+        setIsPrivateProfile(false);
       } else if (res.status === 403) {
-        setError('This profile is private. You need to follow this user to view their profile.');
+        // Profile is private - fetch basic info for follow request
+        await fetchPrivateProfileInfo();
       } else {
         setError('Profile not found');
       }
@@ -65,6 +69,39 @@ export default function Profile() {
       setError('Network error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPrivateProfileInfo = async () => {
+    try {
+      // Fetch basic user info for private profiles
+      const res = await fetch(`/api/users/${id}`, { 
+        credentials: 'include' 
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // Create a minimal profile object for private profiles
+        setProfile({
+          user_id: data.id,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          nickname: data.nickname || '',
+          about: 'This profile is private',
+          avatar_path: '',
+          avatar_url: '',
+          public: false,
+          followers_count: 0,
+          following_count: 0,
+          is_following: false
+        });
+        setIsPrivateProfile(true);
+        setIsFollowing(false);
+      } else {
+        setError('Profile not found');
+      }
+    } catch (err) {
+      setError('Network error');
     }
   };
 
@@ -251,6 +288,56 @@ export default function Profile() {
     }
   };
 
+  const handleAvatarUpload = async (event) => {
+    if (!isOwnProfile) return;
+    
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size must be less than 10MB');
+      return;
+    }
+
+    setAvatarLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const res = await fetch('/api/images/avatar', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Update profile with new avatar
+        setProfile(prev => ({
+          ...prev,
+          avatar_path: data.public_id,
+          avatar_url: data.secure_url
+        }));
+        alert('Avatar updated successfully!');
+      } else {
+        const errorText = await res.text();
+        alert(`Failed to upload avatar: ${errorText}`);
+      }
+    } catch (err) {
+      console.error('Avatar upload failed:', err);
+      alert('Failed to upload avatar. Please try again.');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container">
@@ -299,15 +386,34 @@ export default function Profile() {
       <div className="profile-header">
         <div className="profile-cover">
           <div className="profile-avatar-large">
-            {profile.avatar_path ? (
+            {profile.avatar_url ? (
               <img 
-                src={getAvatarUrl(profile.avatar_path)} 
+                src={profile.avatar_url} 
                 alt={`${profile.first_name} ${profile.last_name}`}
                 className="w-full h-full"
                 style={{ borderRadius: '50%', objectFit: 'cover' }}
               />
             ) : (
               getInitials(profile.first_name, profile.last_name) || '?'
+            )}
+            {isOwnProfile && (
+              <div className="avatar-upload-overlay">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  disabled={avatarLoading}
+                  style={{ display: 'none' }}
+                  id="avatar-upload"
+                />
+                <label htmlFor="avatar-upload" className="avatar-upload-btn">
+                  {avatarLoading ? (
+                    <span className="loading"></span>
+                  ) : (
+                    '📷'
+                  )}
+                </label>
+              </div>
             )}
           </div>
         </div>
@@ -323,6 +429,12 @@ export default function Profile() {
           
           {profile.about && (
             <p className="profile-bio">{profile.about}</p>
+          )}
+          
+          {isPrivateProfile && (
+            <div className="private-profile-notice">
+              <p className="text-muted">This profile is private. Send a follow request to see their posts and full information.</p>
+            </div>
           )}
           
           {isOwnProfile && profile.email && (
@@ -381,30 +493,33 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Profile Tabs */}
-      <div className="profile-tabs">
-        <button 
-          className={`profile-tab ${activeTab === 'posts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('posts')}
-        >
-          Posts
-        </button>
-        <button 
-          className={`profile-tab ${activeTab === 'followers' ? 'active' : ''}`}
-          onClick={() => setActiveTab('followers')}
-        >
-          Followers
-        </button>
-        <button 
-          className={`profile-tab ${activeTab === 'following' ? 'active' : ''}`}
-          onClick={() => setActiveTab('following')}
-        >
-          Following
-        </button>
-      </div>
+      {/* Profile Tabs - Hide for private profiles */}
+      {!isPrivateProfile && (
+        <div className="profile-tabs">
+          <button 
+            className={`profile-tab ${activeTab === 'posts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('posts')}
+          >
+            Posts
+          </button>
+          <button 
+            className={`profile-tab ${activeTab === 'followers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('followers')}
+          >
+            Followers
+          </button>
+          <button 
+            className={`profile-tab ${activeTab === 'following' ? 'active' : ''}`}
+            onClick={() => setActiveTab('following')}
+          >
+            Following
+          </button>
+        </div>
+      )}
 
-      {/* Tab Content */}
-      <div className="profile-content">
+      {/* Tab Content - Hide for private profiles */}
+      {!isPrivateProfile && (
+        <div className="profile-content">
         {activeTab === 'posts' && (
           <div className="posts-section">
             {postsLoading ? (
@@ -471,7 +586,8 @@ export default function Profile() {
             )}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Edit Profile Modal */}
       {showEditModal && (

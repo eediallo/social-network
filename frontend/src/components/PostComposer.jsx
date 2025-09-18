@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useUser } from '../context/useUser';
 import ImageUpload from './ImageUpload';
+import FollowerSelector from './FollowerSelector';
 
 export default function PostComposer({ onPostCreated }) {
   const { user } = useUser();
@@ -15,6 +16,8 @@ export default function PostComposer({ onPostCreated }) {
   const [text, setText] = useState('');
   const [privacy, setPrivacy] = useState('public');
   const [images, setImages] = useState([]);
+  const [selectedFollowers, setSelectedFollowers] = useState([]);
+  const [showFollowerSelector, setShowFollowerSelector] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -50,7 +53,8 @@ export default function PostComposer({ onPostCreated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: text.trim(),
-          privacy: privacy
+          privacy: privacy,
+          allowed_follower_ids: privacy === 'selected' ? selectedFollowers : []
         }),
         credentials: 'include'
       });
@@ -95,6 +99,8 @@ export default function PostComposer({ onPostCreated }) {
         onPostCreated(post);
         setText('');
         setImages([]);
+        setSelectedFollowers([]);
+        setShowFollowerSelector(false);
       } else {
         const errorText = await res.text();
         setError(errorText || 'Failed to create post');
@@ -130,13 +136,31 @@ export default function PostComposer({ onPostCreated }) {
             </span>
             <select
               value={privacy}
-              onChange={(e) => setPrivacy(e.target.value)}
+              onChange={(e) => {
+                setPrivacy(e.target.value);
+                if (e.target.value === 'selected') {
+                  setShowFollowerSelector(true);
+                } else {
+                  setShowFollowerSelector(false);
+                  setSelectedFollowers([]);
+                }
+              }}
               disabled={loading}
             >
               <option value="public">Public</option>
               <option value="followers">Followers</option>
               <option value="selected">Selected</option>
             </select>
+            {privacy === 'selected' && (
+              <button
+                type="button"
+                onClick={() => setShowFollowerSelector(!showFollowerSelector)}
+                className="btn btn-secondary btn-sm"
+                disabled={loading}
+              >
+                {showFollowerSelector ? 'Hide' : 'Select'} Followers ({selectedFollowers.length})
+              </button>
+            )}
           </div>
           
           <button
@@ -148,6 +172,16 @@ export default function PostComposer({ onPostCreated }) {
           </button>
         </div>
       </form>
+      
+      {showFollowerSelector && (
+        <div className="follower-selector-container">
+          <FollowerSelector
+            selectedFollowers={selectedFollowers}
+            onSelectionChange={setSelectedFollowers}
+            disabled={loading}
+          />
+        </div>
+      )}
       
       {error && <p className="form-error mt-2">{error}</p>}
     </div>

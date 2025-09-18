@@ -111,6 +111,49 @@ func (s *CloudinaryService) UploadPostImage(ctx context.Context, file multipart.
 	}, nil
 }
 
+func (s *CloudinaryService) UploadCommentImage(ctx context.Context, file multipart.File, commentID string) (*UploadResult, error) {
+	// Generate unique public ID for comment image
+	imageID := uuid.NewString()
+	publicID := fmt.Sprintf("comments/%s/%s", commentID, imageID)
+
+	fmt.Printf("Cloudinary upload params: PublicID=%s, Folder=social-network/comments\n", publicID)
+
+	// Upload with optimizations for comment images
+	result, err := s.cld.Upload.Upload(ctx, file, uploader.UploadParams{
+		PublicID:       publicID,
+		Folder:         "social-network/comments",
+		ResourceType:   "image",
+		Transformation: "c_limit,w_800/f_auto/q_auto",
+		Overwrite:      &[]bool{false}[0],
+		UniqueFilename: &[]bool{true}[0],
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload comment image: %w", err)
+	}
+
+	fmt.Printf("Cloudinary upload result: PublicID=%s, URL=%s, SecureURL=%s, Width=%d, Height=%d, Format=%s, Bytes=%d\n",
+		result.PublicID, result.URL, result.SecureURL, result.Width, result.Height, result.Format, result.Bytes)
+
+	// Validate the result
+	if result.PublicID == "" {
+		return nil, fmt.Errorf("upload succeeded but no public ID returned")
+	}
+	if result.URL == "" && result.SecureURL == "" {
+		return nil, fmt.Errorf("upload succeeded but no URL returned")
+	}
+
+	return &UploadResult{
+		PublicID:  result.PublicID,
+		URL:       result.URL,
+		SecureURL: result.SecureURL,
+		Width:     result.Width,
+		Height:    result.Height,
+		Format:    result.Format,
+		Bytes:     result.Bytes,
+	}, nil
+}
+
 func (s *CloudinaryService) DeleteImage(ctx context.Context, publicID string) error {
 	_, err := s.cld.Upload.Destroy(ctx, uploader.DestroyParams{
 		PublicID:     publicID,

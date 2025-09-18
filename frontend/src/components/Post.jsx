@@ -2,56 +2,81 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { formatRelativeTime, isValidDate } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
+import CommentComposer from './CommentComposer';
 
 export default function Post({ post }) {
   const [comments, setComments] = useState([]);
   const [showComments, setShowComments] = useState(false);
-  const [newComment, setNewComment] = useState('');
-  const [commentLoading, setCommentLoading] = useState(false);
-  const [likes, setLikes] = useState(0);
+  const [commentCount, setCommentCount] = useState(0);
+  const [likes, setLikes] = useState(post.likes || 0);
   const [isLiked, setIsLiked] = useState(false);
   const [images, setImages] = useState(post.images || []);
+  const [likeLoading, setLikeLoading] = useState(false);
 
-
-  const handleAddComment = async (e) => {
-    e.preventDefault();
-    if (!newComment.trim()) return;
-
-    setCommentLoading(true);
-    try {
-      const res = await fetch(`/api/comments?post_id=${post.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: newComment.trim()
-        }),
-        credentials: 'include'
-      });
-
-      if (res.ok) {
-        const comment = await res.json();
-        // Add the new comment to the list
-        const newCommentData = {
-          id: comment.id,
-          text: newComment.trim(),
-          user_id: 'current_user', // In real app, get from context
-          created_at: new Date().toISOString()
-        };
-        setComments(prev => [...prev, newCommentData]);
-        setNewComment('');
-      } else {
-        console.error('Failed to add comment:', res.status);
+  // Load initial like status and comment count
+  useEffect(() => {
+    const loadLikeStatus = async () => {
+      try {
+        const res = await fetch(`/api/posts/likes?post_id=${post.id}`, {
+          credentials: 'include'
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setLikes(data.likes);
+          setIsLiked(data.is_liked);
+        }
+      } catch (err) {
+        console.error('Error loading like status:', err);
       }
-    } catch (err) {
-      console.error('Failed to add comment:', err);
-    } finally {
-      setCommentLoading(false);
-    }
+    };
+
+    const loadCommentCount = async () => {
+      try {
+        const res = await fetch(`/api/comments?post_id=${post.id}`, {
+          credentials: 'include'
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          setCommentCount(data.length);
+        }
+      } catch (err) {
+        console.error('Error loading comment count:', err);
+      }
+    };
+    
+    loadLikeStatus();
+    loadCommentCount();
+  }, [post.id]);
+
+  const handleCommentAdded = (newComment) => {
+    setComments(prev => [...prev, newComment]);
+    setCommentCount(prev => prev + 1);
   };
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikes(prev => isLiked ? prev - 1 : prev + 1);
+  const handleLike = async () => {
+    if (likeLoading) return;
+    
+    setLikeLoading(true);
+    try {
+      const res = await fetch(`/api/posts/like?post_id=${post.id}`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setLikes(data.likes);
+        setIsLiked(data.is_liked);
+      } else {
+        console.error('Failed to like post');
+      }
+    } catch (err) {
+      console.error('Error liking post:', err);
+    } finally {
+      setLikeLoading(false);
+    }
   };
 
   const loadComments = async () => {
@@ -66,14 +91,8 @@ export default function Post({ post }) {
         if (data === null || !Array.isArray(data)) {
           setComments([]);
         } else {
-          // Map backend data to frontend format
-          const mappedComments = data.map(comment => ({
-            id: comment.id,
-            text: comment.text,
-            user_id: comment.user_id,
-            created_at: comment.created_at
-          }));
-          setComments(mappedComments);
+          // Backend already returns complete comment data with user info and images
+          setComments(data);
         }
       }
     } catch (err) {
@@ -160,9 +179,16 @@ export default function Post({ post }) {
       <div className="post-actions">
         <button
           onClick={handleLike}
-          className={`post-action ${isLiked ? 'active' : ''}`}
+          className={`post-action ${isLiked ? 'active' : ''} ${likeLoading ? 'loading' : ''}`}
+          disabled={likeLoading}
         >
-          <span className="icon">{isLiked ? '❤️' : '🤍'}</span>
+          <span className="icon">
+            {likeLoading ? (
+              <span className="loading"></span>
+            ) : (
+              isLiked ? '❤️' : '🤍'
+            )}
+          </span>
           <span className="count">{likes}</span>
         </button>
         
@@ -171,7 +197,7 @@ export default function Post({ post }) {
           className="post-action"
         >
           <span className="icon">💬</span>
-          <span className="count">{comments.length}</span>
+          <span className="count">{commentCount}</span>
         </button>
         
         <button className="post-action">
@@ -182,34 +208,46 @@ export default function Post({ post }) {
       
       {showComments && (
         <div className="comments-section">
-          <form onSubmit={handleAddComment} className="d-flex gap-2 mb-3">
-            <input
-              type="text"
-              placeholder="Write a comment..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="form-input"
-              disabled={commentLoading}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary btn-sm"
-              disabled={commentLoading || !newComment.trim()}
-            >
-              {commentLoading ? <span className="loading"></span> : 'Post'}
-            </button>
-          </form>
+          <CommentComposer 
+            postId={post.id} 
+            onCommentAdded={handleCommentAdded}
+          />
           
           {comments.map((comment) => (
             <div key={comment.id} className="comment">
               <div className="comment-avatar">
-                {comment.user_id === 'current_user' ? 'Me' : 'U'}
+                {comment.avatar_url && comment.avatar_url.trim() !== '' ? (
+                  <img
+                    src={comment.avatar_url}
+                    alt={`${comment.first_name} ${comment.last_name}`}
+                    className="w-full h-full"
+                    style={{ borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  getInitials(comment.first_name, comment.last_name)
+                )}
               </div>
               <div className="comment-content">
                 <div className="comment-author">
-                  {comment.user_id === 'current_user' ? 'You' : 'User'}
+                  {comment.first_name} {comment.last_name}
                 </div>
                 <div className="comment-text">{comment.text}</div>
+                
+                {comment.images && comment.images.length > 0 && (
+                  <div className="comment-images">
+                    {comment.images.map((image, index) => (
+                      <img
+                        key={image.id}
+                        src={image.url}
+                        alt={`Comment image ${index + 1}`}
+                        className="comment-image"
+                        loading="lazy"
+                        onError={(e) => console.error('Comment image failed to load:', image.url, e)}
+                      />
+                    ))}
+                  </div>
+                )}
+                
                 <div className="comment-meta">
                   {formatTime(comment.created_at)}
                 </div>

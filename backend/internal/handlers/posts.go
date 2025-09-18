@@ -228,6 +228,31 @@ func (h *PostsHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
+
+	// Get the complete comment data with user information
+	var comment struct {
+		ID        string `json:"id"`
+		UserID    string `json:"user_id"`
+		Text      string `json:"text"`
+		CreatedAt string `json:"created_at"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		AvatarURL string `json:"avatar_url"`
+	}
+
+	err = h.DB.QueryRow(`
+		SELECT c.id, c.user_id, c.text, c.created_at, u.first_name, u.last_name, p.cloudinary_avatar_secure_url
+		FROM comments c
+		JOIN users u ON u.id = c.user_id
+		LEFT JOIN profiles p ON p.user_id = c.user_id
+		WHERE c.id = ?
+	`, id).Scan(&comment.ID, &comment.UserID, &comment.Text, &comment.CreatedAt, &comment.FirstName, &comment.LastName, &comment.AvatarURL)
+
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Notify post owner if commenter is not the owner
 	var postOwnerID string
 	err = h.DB.QueryRow("SELECT user_id FROM posts WHERE id = ?", postID).Scan(&postOwnerID)
@@ -242,7 +267,8 @@ func (h *PostsHandler) AddComment(w http.ResponseWriter, r *http.Request) {
 		message := commenterName + " commented on your post"
 		h.NotificationService.CreatePostNotification(sess.UserID, postID, postOwnerID, "comment", message)
 	}
-	_ = json.NewEncoder(w).Encode(map[string]string{"id": id})
+
+	_ = json.NewEncoder(w).Encode(comment)
 }
 
 // List comments for a post
@@ -269,23 +295,79 @@ func (h *PostsHandler) ListComments(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	rows, err := h.DB.Query("SELECT id, user_id, text, created_at FROM comments WHERE post_id = ? ORDER BY created_at ASC", postID)
+	rows, err := h.DB.Query(`
+		SELECT c.id, c.user_id, c.text, c.created_at, u.first_name, u.last_name, p.cloudinary_avatar_secure_url,
+		       ci.id as image_id, ci.cloudinary_secure_url as image_url, ci.format as image_format
+		FROM comments c
+		JOIN users u ON u.id = c.user_id
+		LEFT JOIN profiles p ON p.user_id = c.user_id
+		LEFT JOIN comment_images ci ON ci.comment_id = c.id
+		WHERE c.post_id = ? 
+		ORDER BY c.created_at ASC
+	`, postID)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
-	type comment struct {
-		ID        string `json:"id"`
-		UserID    string `json:"user_id"`
-		Text      string `json:"text"`
-		CreatedAt string `json:"created_at"`
+	type commentImage struct {
+		ID     string `json:"id"`
+		URL    string `json:"url"`
+		Format string `json:"format"`
 	}
-	var out []comment
+	type comment struct {
+		ID        string         `json:"id"`
+		UserID    string         `json:"user_id"`
+		Text      string         `json:"text"`
+		CreatedAt string         `json:"created_at"`
+		FirstName string         `json:"first_name"`
+		LastName  string         `json:"last_name"`
+		AvatarURL string         `json:"avatar_url"`
+		Images    []commentImage `json:"images"`
+	}
+
+	// Group comments and their images while preserving order
+	commentMap := make(map[string]*comment)
+	var commentOrder []string // Track order of comments
+
 	for rows.Next() {
 		var c comment
-		_ = rows.Scan(&c.ID, &c.UserID, &c.Text, &c.CreatedAt)
-		out = append(out, c)
+		var firstName, lastName string
+		var avatarURL, imageID, imageURL, imageFormat sql.NullString
+		_ = rows.Scan(&c.ID, &c.UserID, &c.Text, &c.CreatedAt, &firstName, &lastName, &avatarURL, &imageID, &imageURL, &imageFormat)
+		c.FirstName = firstName
+		c.LastName = lastName
+		c.AvatarURL = avatarURL.String
+
+		// Check if this comment already exists
+		if existingComment, exists := commentMap[c.ID]; exists {
+			// Add image to existing comment if it exists
+			if imageID.Valid && imageURL.Valid {
+				existingComment.Images = append(existingComment.Images, commentImage{
+					ID:     imageID.String,
+					URL:    imageURL.String,
+					Format: imageFormat.String,
+				})
+			}
+		} else {
+			// Create new comment
+			c.Images = []commentImage{}
+			if imageID.Valid && imageURL.Valid {
+				c.Images = append(c.Images, commentImage{
+					ID:     imageID.String,
+					URL:    imageURL.String,
+					Format: imageFormat.String,
+				})
+			}
+			commentMap[c.ID] = &c
+			commentOrder = append(commentOrder, c.ID)
+		}
+	}
+
+	// Convert map back to slice in correct order
+	var out []comment
+	for _, commentID := range commentOrder {
+		out = append(out, *commentMap[commentID])
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }
@@ -350,4 +432,104 @@ func (h *PostsHandler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
 		out = append(out, p)
 	}
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// LikePost likes a post
+func (h *PostsHandler) LikePost(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	postID := r.URL.Query().Get("post_id")
+	if postID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user can see this post (reuse visibility logic)
+	visibleQ := `SELECT COUNT(1)
+	FROM posts p
+	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
+	LEFT JOIN post_allowed_followers paf ON paf.post_id = p.id AND paf.follower_user_id = ?
+	WHERE p.id = ? AND (p.privacy='public' OR (p.privacy='followers' AND f.follower_user_id IS NOT NULL) OR (p.privacy='selected' AND paf.follower_user_id IS NOT NULL))`
+	var cnt int
+	_ = h.DB.QueryRow(visibleQ, sess.UserID, sess.UserID, postID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Check if user already liked this post
+	var existingLike int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM post_likes WHERE post_id = ? AND user_id = ?", postID, sess.UserID).Scan(&existingLike)
+
+	if existingLike > 0 {
+		// Unlike: delete the like
+		_, err := h.DB.Exec("DELETE FROM post_likes WHERE post_id = ? AND user_id = ?", postID, sess.UserID)
+		if err != nil {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Like: insert the like
+		_, err := h.DB.Exec("INSERT INTO post_likes(post_id, user_id, created_at) VALUES(?,?,?)", postID, sess.UserID, time.Now())
+		if err != nil {
+			http.Error(w, "server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Get updated like count
+	var likeCount int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM post_likes WHERE post_id = ?", postID).Scan(&likeCount)
+
+	// Check if current user liked this post
+	var isLiked int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM post_likes WHERE post_id = ? AND user_id = ?", postID, sess.UserID).Scan(&isLiked)
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"likes":    likeCount,
+		"is_liked": isLiked > 0,
+	})
+}
+
+// GetPostLikes gets the like count and status for a post
+func (h *PostsHandler) GetPostLikes(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	postID := r.URL.Query().Get("post_id")
+	if postID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user can see this post (reuse visibility logic)
+	visibleQ := `SELECT COUNT(1)
+	FROM posts p
+	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
+	LEFT JOIN post_allowed_followers paf ON paf.post_id = p.id AND paf.follower_user_id = ?
+	WHERE p.id = ? AND (p.privacy='public' OR (p.privacy='followers' AND f.follower_user_id IS NOT NULL) OR (p.privacy='selected' AND paf.follower_user_id IS NOT NULL))`
+	var cnt int
+	_ = h.DB.QueryRow(visibleQ, sess.UserID, sess.UserID, postID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Get like count
+	var likeCount int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM post_likes WHERE post_id = ?", postID).Scan(&likeCount)
+
+	// Check if current user liked this post
+	var isLiked int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM post_likes WHERE post_id = ? AND user_id = ?", postID, sess.UserID).Scan(&isLiked)
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"likes":    likeCount,
+		"is_liked": isLiked > 0,
+	})
 }

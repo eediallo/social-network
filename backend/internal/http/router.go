@@ -73,8 +73,10 @@ func NewRouter(db *sql.DB) http.Handler {
 	notificationService := services.NewNotificationService(db, wsHub)
 
 	imagesHandler := &handlers.ImagesHandler{DB: db, CloudinarySvc: cloudinarySvc}
+	commentImagesHandler := &handlers.CommentImagesHandler{DB: db, CloudinarySvc: cloudinarySvc}
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/avatar", imagesHandler.UploadAvatar)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/post", imagesHandler.UploadPostImage)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/comment", commentImagesHandler.UploadCommentImage)
 	postsHandler := &handlers.PostsHandler{DB: db, NotificationService: notificationService}
 	// Static file serving for images
 	r.Get("/images/{filename}", func(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +93,8 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/posts/images", postsHandler.GetPostImages)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/comments", postsHandler.AddComment)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/comments", postsHandler.ListComments)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/posts/like", postsHandler.LikePost)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/posts/likes", postsHandler.GetPostLikes)
 
 	followHandler := &handlers.FollowHandler{DB: db, NotificationService: notificationService}
 	r.Route("/api/follow", func(r chi.Router) {

@@ -2013,6 +2013,159 @@
   }
 }
 
+/* Follower Selector Styles */
+.follower-selector-container {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+}
+
+.follower-selector {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.follower-selector-header {
+  margin-bottom: 1rem;
+}
+
+.follower-selector-header h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.follower-selector-loading,
+.follower-selector-error {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.follower-selector-error .error-text {
+  color: var(--error-color);
+  margin-bottom: 1rem;
+}
+
+.follower-selector-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+}
+
+.follower-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: var(--bg-primary);
+}
+
+.follower-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.follower-item:last-child {
+  border-bottom: none;
+}
+
+.follower-item:hover:not(.disabled) {
+  background-color: var(--bg-secondary);
+}
+
+.follower-item.selected {
+  background-color: var(--primary-light);
+  border-color: var(--primary-color);
+}
+
+.follower-item.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.follower-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-right: 0.75rem;
+}
+
+.follower-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.follower-name {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.follower-nickname {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.follower-checkbox {
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.checkbox-checked {
+  color: var(--primary-color);
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.checkbox-unchecked {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+}
+
+/* Comment Images Styles */
+.comment-images {
+  margin: 0.5rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.comment-image {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: var(--border-radius);
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.comment-image:hover {
+  transform: scale(1.02);
+}
+
 /* Image Upload Styles */
 .image-upload {
   margin: 1rem 0;

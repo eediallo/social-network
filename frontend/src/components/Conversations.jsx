@@ -187,7 +187,16 @@ export default function Conversations({ onSelectConversation }) {
                   onClick={() => handleDirectConversationClick(conversation)}
                 >
                   <div className="conversation-avatar">
-                    {getInitials(conversation.user_name)}
+                    {conversation.avatar_url && conversation.avatar_url.trim() !== '' ? (
+                      <img 
+                        src={conversation.avatar_url} 
+                        alt={conversation.user_name}
+                        className="w-full h-full"
+                        style={{ borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      getInitials(conversation.user_name)
+                    )}
                   </div>
                   <div className="conversation-content">
                     <div className="conversation-header">

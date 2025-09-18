@@ -508,6 +508,7 @@ func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 				ELSE dm.from_user_id
 			END as other_user_id,
 			u.first_name, u.last_name,
+			p.cloudinary_avatar_secure_url,
 			MAX(dm.created_at) as last_message_at,
 			COUNT(CASE WHEN dm.to_user_id = ? AND (dm.read_at IS NULL OR dm.read_at = '') THEN 1 END) as unread_count
 		FROM direct_messages dm
@@ -515,8 +516,9 @@ func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 			WHEN dm.from_user_id = ? THEN dm.to_user_id
 			ELSE dm.from_user_id
 		END
+		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE dm.from_user_id = ? OR dm.to_user_id = ?
-		GROUP BY other_user_id, u.first_name, u.last_name
+		GROUP BY other_user_id, u.first_name, u.last_name, p.cloudinary_avatar_secure_url
 		ORDER BY last_message_at DESC
 		LIMIT 50
 	`, sess.UserID, sess.UserID, sess.UserID, sess.UserID, sess.UserID)
@@ -530,6 +532,7 @@ func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 	type conversation struct {
 		UserID        string `json:"user_id"`
 		UserName      string `json:"user_name"`
+		AvatarURL     string `json:"avatar_url"`
 		LastMessageAt string `json:"last_message_at"`
 		LastMessage   string `json:"last_message"`
 		UnreadCount   int    `json:"unread_count"`
@@ -539,8 +542,10 @@ func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c conversation
 		var firstName, lastName string
-		_ = rows.Scan(&c.UserID, &firstName, &lastName, &c.LastMessageAt, &c.UnreadCount)
+		var avatarURL sql.NullString
+		_ = rows.Scan(&c.UserID, &firstName, &lastName, &avatarURL, &c.LastMessageAt, &c.UnreadCount)
 		c.UserName = firstName + " " + lastName
+		c.AvatarURL = avatarURL.String
 		// For now, we'll set a default message since getting the last message text is complex
 		c.LastMessage = "Message sent"
 		conversations = append(conversations, c)

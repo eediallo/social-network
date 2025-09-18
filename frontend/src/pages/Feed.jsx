@@ -59,13 +59,14 @@ export default function Feed() {
         console.log('Backend feed data:', data);
         // Map backend data to frontend format
         const mappedPosts = data.map(post => ({
-          id: post.ID,
-          user_id: post.UserID,
-          text: post.Text,
-          privacy: post.Privacy,
-          created_at: post.CreatedAt,
-          first_name: post.FirstName || 'User',
-          last_name: post.LastName || post.UserID.substring(0, 8),
+          id: post.id,
+          user_id: post.user_id,
+          text: post.text,
+          privacy: post.privacy,
+          created_at: post.created_at,
+          first_name: post.first_name || 'User',
+          last_name: post.last_name || post.user_id.substring(0, 8),
+          avatar_url: post.avatar_url,
           likes: 0,
           comments: 0,
           images: post.images || []

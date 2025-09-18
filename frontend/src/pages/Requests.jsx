@@ -107,7 +107,16 @@ export default function Requests() {
             <div key={request.id} className="request-card">
               <div className="request-user">
                 <div className="user-avatar">
-                  {getInitials(request.first_name, request.last_name)}
+                  {request.avatar_url && request.avatar_url.trim() !== '' ? (
+                    <img 
+                      src={request.avatar_url} 
+                      alt={`${request.first_name} ${request.last_name}`}
+                      className="w-full h-full"
+                      style={{ borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    getInitials(request.first_name, request.last_name)
+                  )}
                 </div>
                 <div className="user-info">
                   <h4 className="user-name">{request.first_name} {request.last_name}</h4>

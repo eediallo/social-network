@@ -62,11 +62,13 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	// public posts OR posts from users the requester follows (for followers privacy) OR selected where allowed includes requester
 	q := `
 	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at, u.first_name, u.last_name,
+	       p_avatar.cloudinary_avatar_secure_url as user_avatar_url,
 	       pi.id as image_id, 
 	       COALESCE(pi.cloudinary_secure_url, pi.cloudinary_url, '/images/' || pi.path) as image_url,
 	       pi.format as image_format
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
+	LEFT JOIN profiles p_avatar ON p_avatar.user_id = p.user_id
 	LEFT JOIN follows f ON f.followed_user_id = p.user_id AND f.follower_user_id = ?
 	LEFT JOIN post_allowed_followers paf ON paf.post_id = p.id AND paf.follower_user_id = ?
 	LEFT JOIN post_images pi ON pi.post_id = p.id
@@ -86,13 +88,14 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 		Format string `json:"format"`
 	}
 	type post struct {
-		ID        string  `json:"ID"`
-		UserID    string  `json:"UserID"`
-		Text      string  `json:"Text"`
-		Privacy   string  `json:"Privacy"`
-		CreatedAt string  `json:"CreatedAt"`
-		FirstName string  `json:"FirstName"`
-		LastName  string  `json:"LastName"`
+		ID        string  `json:"id"`
+		UserID    string  `json:"user_id"`
+		Text      string  `json:"text"`
+		Privacy   string  `json:"privacy"`
+		CreatedAt string  `json:"created_at"`
+		FirstName string  `json:"first_name"`
+		LastName  string  `json:"last_name"`
+		AvatarURL string  `json:"avatar_url"`
 		Images    []image `json:"images"`
 	}
 
@@ -102,8 +105,9 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var p post
-		var imageID, imageURL, imageFormat sql.NullString
-		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt, &p.FirstName, &p.LastName, &imageID, &imageURL, &imageFormat)
+		var imageID, imageURL, imageFormat, userAvatarURL sql.NullString
+		_ = rows.Scan(&p.ID, &p.UserID, &p.Text, &p.Privacy, &p.CreatedAt, &p.FirstName, &p.LastName, &userAvatarURL, &imageID, &imageURL, &imageFormat)
+		p.AvatarURL = userAvatarURL.String
 
 		if existingPost, exists := postMap[p.ID]; exists {
 			// Add image to existing post

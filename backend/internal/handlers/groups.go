@@ -468,10 +468,11 @@ func (h *GroupsHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Search users by name (excluding current user)
 	rows, err := h.DB.Query(`
-		SELECT id, first_name, last_name, email
-		FROM users 
-		WHERE id != ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)
-		ORDER BY first_name, last_name
+		SELECT u.id, u.first_name, u.last_name, u.email, p.cloudinary_avatar_secure_url
+		FROM users u
+		LEFT JOIN profiles p ON p.user_id = u.id
+		WHERE u.id != ? AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)
+		ORDER BY u.first_name, u.last_name
 		LIMIT 20
 	`, sess.UserID, "%"+query+"%", "%"+query+"%", "%"+query+"%")
 	if err != nil {
@@ -485,11 +486,14 @@ func (h *GroupsHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		FirstName string `json:"first_name"`
 		LastName  string `json:"last_name"`
 		Email     string `json:"email"`
+		AvatarURL string `json:"avatar_url"`
 	}
 	var out []user
 	for rows.Next() {
 		var u user
-		_ = rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email)
+		var avatarURL sql.NullString
+		_ = rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &avatarURL)
+		u.AvatarURL = avatarURL.String
 		out = append(out, u)
 	}
 	_ = json.NewEncoder(w).Encode(out)

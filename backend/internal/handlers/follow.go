@@ -130,7 +130,7 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := h.DB.Query(`
-		SELECT u.id, u.first_name, u.last_name, p.nickname 
+		SELECT u.id, u.first_name, u.last_name, p.nickname, p.cloudinary_avatar_secure_url
 		FROM follows f 
 		JOIN users u ON u.id = f.follower_user_id 
 		LEFT JOIN profiles p ON p.user_id = u.id 
@@ -145,13 +145,15 @@ func (h *FollowHandler) ListFollowers(w http.ResponseWriter, r *http.Request) {
 		FirstName string `json:"first_name"`
 		LastName  string `json:"last_name"`
 		Nickname  string `json:"nickname"`
+		AvatarURL string `json:"avatar_url"`
 	}
 	var followers []follower
 	for rows.Next() {
 		var f follower
-		var nickname sql.NullString
-		_ = rows.Scan(&f.ID, &f.FirstName, &f.LastName, &nickname)
+		var nickname, avatarURL sql.NullString
+		_ = rows.Scan(&f.ID, &f.FirstName, &f.LastName, &nickname, &avatarURL)
 		f.Nickname = nickname.String
+		f.AvatarURL = avatarURL.String
 		followers = append(followers, f)
 	}
 	// Ensure we always return an array, even if empty
@@ -168,7 +170,7 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := h.DB.Query(`
-		SELECT u.id, u.first_name, u.last_name, p.nickname 
+		SELECT u.id, u.first_name, u.last_name, p.nickname, p.cloudinary_avatar_secure_url
 		FROM follows f 
 		JOIN users u ON u.id = f.followed_user_id 
 		LEFT JOIN profiles p ON p.user_id = u.id 
@@ -183,13 +185,15 @@ func (h *FollowHandler) ListFollowing(w http.ResponseWriter, r *http.Request) {
 		FirstName string `json:"first_name"`
 		LastName  string `json:"last_name"`
 		Nickname  string `json:"nickname"`
+		AvatarURL string `json:"avatar_url"`
 	}
 	var following []followingUser
 	for rows.Next() {
 		var f followingUser
-		var nickname sql.NullString
-		_ = rows.Scan(&f.ID, &f.FirstName, &f.LastName, &nickname)
+		var nickname, avatarURL sql.NullString
+		_ = rows.Scan(&f.ID, &f.FirstName, &f.LastName, &nickname, &avatarURL)
 		f.Nickname = nickname.String
+		f.AvatarURL = avatarURL.String
 		following = append(following, f)
 	}
 	// Ensure we always return an array, even if empty
@@ -206,9 +210,10 @@ func (h *FollowHandler) ListRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := h.DB.Query(`
-		SELECT fr.id, u.id as user_id, u.first_name, u.last_name, u.email, fr.created_at
+		SELECT fr.id, u.id as user_id, u.first_name, u.last_name, u.email, fr.created_at, p.cloudinary_avatar_secure_url
 		FROM follow_requests fr
 		JOIN users u ON u.id = fr.from_user_id
+		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE fr.to_user_id = ? AND fr.status = 'pending'
 		ORDER BY fr.created_at DESC`, sess.UserID)
 	if err != nil {
@@ -223,11 +228,14 @@ func (h *FollowHandler) ListRequests(w http.ResponseWriter, r *http.Request) {
 		LastName  string `json:"last_name"`
 		Email     string `json:"email"`
 		CreatedAt string `json:"created_at"`
+		AvatarURL string `json:"avatar_url"`
 	}
 	var requests []followRequest
 	for rows.Next() {
 		var req followRequest
-		_ = rows.Scan(&req.ID, &req.UserID, &req.FirstName, &req.LastName, &req.Email, &req.CreatedAt)
+		var avatarURL sql.NullString
+		_ = rows.Scan(&req.ID, &req.UserID, &req.FirstName, &req.LastName, &req.Email, &req.CreatedAt, &avatarURL)
+		req.AvatarURL = avatarURL.String
 		requests = append(requests, req)
 	}
 	// Ensure we always return an array, even if empty

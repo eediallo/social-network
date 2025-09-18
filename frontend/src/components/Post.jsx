@@ -111,7 +111,16 @@ export default function Post({ post }) {
     <div className="post">
       <div className="post-header">
         <div className="post-avatar">
-          {getInitials(post.first_name, post.last_name) || '?'}
+          {post.avatar_url && post.avatar_url.trim() !== '' ? (
+            <img 
+              src={post.avatar_url} 
+              alt={`${post.first_name} ${post.last_name}`}
+              className="w-full h-full"
+              style={{ borderRadius: '50%', objectFit: 'cover' }}
+            />
+          ) : (
+            getInitials(post.first_name, post.last_name) || '?'
+          )}
         </div>
         <div className="post-author">
           <Link

@@ -147,7 +147,16 @@ export default function NewConversation({ onClose, onSelectConversation }) {
                 onClick={() => handleUserSelect(user)}
               >
                 <div className="user-avatar">
-                  {getInitials(`${user.first_name} ${user.last_name}`)}
+                  {user.avatar_url && user.avatar_url.trim() !== '' ? (
+                    <img 
+                      src={user.avatar_url} 
+                      alt={`${user.first_name} ${user.last_name}`}
+                      className="w-full h-full"
+                      style={{ borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    getInitials(`${user.first_name} ${user.last_name}`)
+                  )}
                 </div>
                 <div className="user-info">
                   <div className="user-name">

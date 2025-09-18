@@ -386,7 +386,7 @@ export default function Profile() {
       <div className="profile-header">
         <div className="profile-cover">
           <div className="profile-avatar-large">
-            {profile.avatar_url ? (
+            {profile.avatar_url && profile.avatar_url.trim() !== '' ? (
               <img 
                 src={profile.avatar_url} 
                 alt={`${profile.first_name} ${profile.last_name}`}
@@ -551,7 +551,16 @@ export default function Profile() {
                 {followers.map(follower => (
                   <div key={follower.id} className="user-card">
                     <div className="user-avatar">
-                      {getInitials(follower.first_name, follower.last_name)}
+                      {follower.avatar_url && follower.avatar_url.trim() !== '' ? (
+                        <img 
+                          src={follower.avatar_url} 
+                          alt={`${follower.first_name} ${follower.last_name}`}
+                          className="w-full h-full"
+                          style={{ borderRadius: '50%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        getInitials(follower.first_name, follower.last_name)
+                      )}
                     </div>
                     <div className="user-info">
                       <h4>{follower.first_name} {follower.last_name}</h4>
@@ -574,7 +583,16 @@ export default function Profile() {
                 {following.map(user => (
                   <div key={user.id} className="user-card">
                     <div className="user-avatar">
-                      {getInitials(user.first_name, user.last_name)}
+                      {user.avatar_url && user.avatar_url.trim() !== '' ? (
+                        <img 
+                          src={user.avatar_url} 
+                          alt={`${user.first_name} ${user.last_name}`}
+                          className="w-full h-full"
+                          style={{ borderRadius: '50%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        getInitials(user.first_name, user.last_name)
+                      )}
                     </div>
                     <div className="user-info">
                       <h4>{user.first_name} {user.last_name}</h4>

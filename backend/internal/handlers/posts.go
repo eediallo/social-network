@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"social-network/backend/internal/auth"
@@ -15,6 +16,7 @@ import (
 type PostsHandler struct {
 	DB                  *sql.DB
 	NotificationService *services.NotificationService
+	CloudinarySvc       *services.CloudinaryService
 }
 
 type createPostRequest struct {
@@ -64,7 +66,7 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	SELECT p.id, p.user_id, p.text, p.privacy, p.created_at, u.first_name, u.last_name,
 	       p_avatar.cloudinary_avatar_secure_url as user_avatar_url,
 	       pi.id as image_id, 
-	       COALESCE(pi.cloudinary_secure_url, pi.cloudinary_url, '/images/' || pi.path) as image_url,
+	       COALESCE(pi.cloudinary_secure_url, pi.cloudinary_url, pi.path) as image_url,
 	       pi.format as image_format
 	FROM posts p
 	JOIN users u ON u.id = p.user_id
@@ -133,10 +135,22 @@ func (h *PostsHandler) Feed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Convert map to slice in the correct order
+	// Convert map to slice in the correct order and fix image URLs
 	var out []post
 	for _, postID := range postOrder {
 		if p, exists := postMap[postID]; exists {
+			// Fix image URLs - convert Cloudinary public IDs to full URLs
+			for i, img := range p.Images {
+				if img.URL != "" && !strings.HasPrefix(img.URL, "http") {
+					// This is a Cloudinary public ID, convert to full URL
+					if h.CloudinarySvc != nil {
+						p.Images[i].URL = h.CloudinarySvc.GetImageURL(img.URL)
+					} else {
+						// Fallback to hardcoded URL if CloudinaryService is not available
+						p.Images[i].URL = "https://res.cloudinary.com/dzz51m6zs/image/upload/" + img.URL
+					}
+				}
+			}
 			out = append(out, *p)
 		}
 	}

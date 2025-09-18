@@ -77,7 +77,7 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/avatar", imagesHandler.UploadAvatar)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/post", imagesHandler.UploadPostImage)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/images/comment", commentImagesHandler.UploadCommentImage)
-	postsHandler := &handlers.PostsHandler{DB: db, NotificationService: notificationService}
+	postsHandler := &handlers.PostsHandler{DB: db, NotificationService: notificationService, CloudinarySvc: cloudinarySvc}
 	// Static file serving for images
 	r.Get("/images/{filename}", func(w http.ResponseWriter, r *http.Request) {
 		filename := chi.URLParam(r, "filename")

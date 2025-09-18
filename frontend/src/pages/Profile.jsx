@@ -16,10 +16,17 @@ export default function Profile() {
   const [postsLoading, setPostsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followRequestSent, setFollowRequestSent] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
   const [activeTab, setActiveTab] = useState('posts'); // posts, followers, following
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    nickname: '',
+    about: ''
+  });
+  const [editLoading, setEditLoading] = useState(false);
 
   const isOwnProfile = currentUser?.id === id;
 
@@ -153,12 +160,22 @@ export default function Profile() {
           });
           
           if (res.ok) {
-            // For now, assume it's accepted immediately
-            setIsFollowing(true);
-            setProfile(prev => ({
-              ...prev,
-              followers_count: prev.followers_count + 1
-            }));
+            const data = await res.json();
+            if (data.status === 'followed') {
+              // Auto-followed (public profile)
+              setIsFollowing(true);
+              setProfile(prev => ({
+                ...prev,
+                followers_count: prev.followers_count + 1
+              }));
+            } else if (data.status === 'requested') {
+              // Follow request sent (private profile)
+              setFollowRequestSent(true);
+              alert('Follow request sent! You will be notified when they respond.');
+            }
+          } else {
+            const errorText = await res.text();
+            alert(`Failed to send follow request: ${errorText}`);
           }
         }
       } catch (err) {
@@ -192,6 +209,45 @@ export default function Profile() {
       } catch (err) {
         console.error('Failed to update privacy:', err);
       }
+    }
+  };
+
+  const handleEditProfile = () => {
+    if (!isOwnProfile) return;
+    setEditForm({
+      nickname: profile.nickname || '',
+      about: profile.about || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!isOwnProfile) return;
+    
+    setEditLoading(true);
+    try {
+      const res = await fetch('/api/me/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+        credentials: 'include'
+      });
+      
+      if (res.ok) {
+        setProfile(prev => ({
+          ...prev,
+          nickname: editForm.nickname,
+          about: editForm.about
+        }));
+        setShowEditModal(false);
+      } else {
+        alert('Failed to update profile');
+      }
+    } catch (err) {
+      console.error('Failed to update profile:', err);
+      alert('Failed to update profile');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -293,12 +349,14 @@ export default function Profile() {
               <button
                 onClick={handleFollow}
                 disabled={followLoading}
-                className={`btn ${isFollowing ? 'btn-secondary' : 'btn-primary'}`}
+                className={`btn ${isFollowing ? 'btn-secondary' : 
+                  followRequestSent ? 'btn-warning' : 'btn-primary'}`}
               >
                 {followLoading ? (
                   <span className="loading"></span>
                 ) : (
-                  isFollowing ? 'Following' : 'Follow'
+                  isFollowing ? 'Following' : 
+                  followRequestSent ? 'Request Sent' : 'Follow'
                 )}
               </button>
             )}
@@ -311,7 +369,10 @@ export default function Profile() {
                 >
                   {profile.public ? 'Public' : 'Private'}
                 </button>
-                <button className="btn btn-primary">
+                <button 
+                  onClick={handleEditProfile}
+                  className="btn btn-primary"
+                >
                   Edit Profile
                 </button>
               </>
@@ -411,6 +472,70 @@ export default function Profile() {
           </div>
         )}
       </div>
+
+      {/* Edit Profile Modal */}
+      {showEditModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Edit Profile</h3>
+              <button 
+                onClick={() => setShowEditModal(false)}
+                className="btn-close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label htmlFor="nickname">Nickname</label>
+                <input
+                  type="text"
+                  id="nickname"
+                  value={editForm.nickname}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, nickname: e.target.value }))}
+                  placeholder="Enter your nickname"
+                  className="form-control"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="about">About Me</label>
+                <textarea
+                  id="about"
+                  value={editForm.about}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, about: e.target.value }))}
+                  placeholder="Tell us about yourself"
+                  className="form-control"
+                  rows="4"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="btn btn-secondary"
+                disabled={editLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                className="btn btn-primary"
+                disabled={editLoading}
+              >
+                {editLoading ? (
+                  <>
+                    <span className="loading"></span>
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

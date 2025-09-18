@@ -1584,6 +1584,25 @@
   gap: var(--spacing-sm);
 }
 
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.btn-close:hover {
+  background-color: var(--bg-secondary);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .chat-container {

@@ -9,6 +9,10 @@ export default function Groups() {
   const [success, setSuccess] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [popularTags, setPopularTags] = useState([]);
 
   // Mock data for testing UI
   const mockGroups = [
@@ -52,11 +56,23 @@ export default function Groups() {
 
   useEffect(() => {
     fetchGroups();
+    fetchCategories();
+    fetchPopularTags();
   }, []);
+
+  useEffect(() => {
+    fetchGroups();
+  }, [selectedCategory, searchTerm]);
 
   const fetchGroups = async () => {
     try {
-      const res = await fetch('/api/groups', { credentials: 'include' });
+      let url = '/api/groups';
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (selectedCategory) params.append('category', selectedCategory);
+      if (params.toString()) url += '?' + params.toString();
+
+      const res = await fetch(url, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         
@@ -66,6 +82,8 @@ export default function Groups() {
           user_id: group.OwnerID,
           title: group.Title,
           description: group.Description,
+          category: group.Category || 'general',
+          tags: group.Tags || [],
           created_at: group.CreatedAt,
           member_count: group.member_count || 0,
           is_member: group.is_member === 1, // Convert 1/0 to boolean
@@ -85,12 +103,41 @@ export default function Groups() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch('/api/groups/categories', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch categories:', err);
+    }
+  };
+
+  const fetchPopularTags = async () => {
+    try {
+      const res = await fetch('/api/groups/tags/popular', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setPopularTags(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch popular tags:', err);
+    }
+  };
+
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    const tagsString = formData.get('tags');
+    const tags = tagsString ? tagsString.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
+    
     const groupData = {
       title: formData.get('title'),
-      description: formData.get('description')
+      description: formData.get('description'),
+      category: formData.get('category') || 'general',
+      tags: tags
     };
 
     setCreateLoading(true);
@@ -111,6 +158,8 @@ export default function Groups() {
           user_id: newGroup.OwnerID,
           title: newGroup.Title,
           description: newGroup.Description,
+          category: newGroup.Category || 'general',
+          tags: newGroup.Tags || [],
           created_at: newGroup.CreatedAt,
           member_count: 1, // Creator is the first member
           is_member: true, // Creator is always a member
@@ -185,6 +234,29 @@ export default function Groups() {
                   disabled={createLoading}
                 />
               </div>
+              <div className="form-group">
+                <select
+                  name="category"
+                  className="form-input"
+                  disabled={createLoading}
+                >
+                  <option value="general">General</option>
+                  {categories && categories.map(category => (
+                    <option key={category} value={category}>
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <input
+                  type="text"
+                  name="tags"
+                  placeholder="Tags (comma-separated, e.g., tech, programming, coding)"
+                  className="form-input"
+                  disabled={createLoading}
+                />
+              </div>
               <div className="d-flex gap-2">
                 <button
                   type="submit"
@@ -229,7 +301,68 @@ export default function Groups() {
         </div>
       )}
 
-      {groups.length === 0 && !error && (
+      {/* Filters and Search */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="d-flex gap-3 align-center flex-wrap">
+            <div className="form-group mb-0">
+              <input
+                type="text"
+                placeholder="Search groups..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="form-input"
+              />
+            </div>
+            <div className="form-group mb-0">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="form-input"
+              >
+                <option value="">All Categories</option>
+                {categories && categories.map(category => (
+                  <option key={category} value={category}>
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {(searchTerm || selectedCategory) && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCategory('');
+                }}
+                className="btn btn-secondary btn-sm"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+          
+          {/* Popular Tags */}
+          {popularTags && popularTags.length > 0 && (
+            <div className="mt-3">
+              <h4 className="mb-2">Popular Tags</h4>
+              <div className="tags-container">
+                {popularTags.slice(0, 10).map(tag => (
+                  <span
+                    key={tag.tag}
+                    className="tag"
+                    onClick={() => setSearchTerm(tag.tag)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {tag.tag} ({tag.count})
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {groups && groups.length === 0 && !error && (
         <div className="card">
           <div className="card-body text-center">
             <h3>No groups yet</h3>
@@ -239,7 +372,7 @@ export default function Groups() {
       )}
 
       <div className="groups-grid">
-        {groups.map((group) => (
+        {groups && groups.map((group) => (
           <div key={group.id} className="group-card">
             <div className="group-card-header">
               <div className="group-icon">
@@ -249,6 +382,19 @@ export default function Groups() {
                 <h3 className="group-title">{group.title}</h3>
                 {group.description && (
                   <p className="group-description">{group.description}</p>
+                )}
+                <div className="group-category">
+                  <span className="category-badge">{group.category}</span>
+                </div>
+                {group.tags && group.tags.length > 0 && (
+                  <div className="group-tags">
+                    {group.tags.slice(0, 3).map(tag => (
+                      <span key={tag} className="tag">{tag}</span>
+                    ))}
+                    {group.tags && group.tags.length > 3 && (
+                      <span className="tag-more">+{group.tags.length - 3} more</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

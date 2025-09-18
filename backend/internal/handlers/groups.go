@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"social-network/backend/internal/auth"
 	"social-network/backend/internal/services"
@@ -17,7 +18,10 @@ type GroupsHandler struct {
 	NotificationService *services.NotificationService
 }
 
-type createGroupReq struct{ Title, Description string }
+type createGroupReq struct {
+	Title, Description, Category string
+	Tags                         []string `json:"tags"`
+}
 
 func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	sess, ok := auth.SessionFromContext(r)
@@ -30,11 +34,30 @@ func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+
+	// Set default category if not provided
+	if body.Category == "" {
+		body.Category = "general"
+	}
+
 	gid := uuid.NewString()
-	if _, err := h.DB.Exec("INSERT INTO groups(id, owner_user_id, title, description) VALUES(?,?,?,?)", gid, sess.UserID, body.Title, body.Description); err != nil {
+	if _, err := h.DB.Exec("INSERT INTO groups(id, owner_user_id, title, description, category) VALUES(?,?,?,?,?)",
+		gid, sess.UserID, body.Title, body.Description, body.Category); err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
+
+	// Add tags if provided
+	if len(body.Tags) > 0 {
+		for _, tag := range body.Tags {
+			if tag != "" {
+				tagID := uuid.NewString()
+				_, _ = h.DB.Exec("INSERT INTO group_tags(id, group_id, tag) VALUES(?,?,?)",
+					tagID, gid, strings.ToLower(strings.TrimSpace(tag)))
+			}
+		}
+	}
+
 	// owner is a member
 	_, _ = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?,'owner')", gid, sess.UserID)
 
@@ -51,6 +74,8 @@ func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		"OwnerID":     sess.UserID,
 		"Title":       body.Title,
 		"Description": body.Description,
+		"Category":    body.Category,
+		"Tags":        body.Tags,
 		"CreatedAt":   createdAt,
 	}
 
@@ -71,26 +96,26 @@ func (h *GroupsHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 
 	if search != "" {
 		query = `
-			SELECT g.id, g.owner_user_id, g.title, g.description, g.created_at,
+			SELECT g.id, g.owner_user_id, g.title, g.description, g.category, g.created_at,
 			       COUNT(gm.user_id) as member_count,
 			       CASE WHEN g.owner_user_id = ? THEN 'owner' ELSE gm.role END as user_role,
 			       CASE WHEN g.owner_user_id = ? OR gm.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member
 			FROM groups g
 			LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
-			WHERE g.title LIKE ? OR g.description LIKE ?
-			GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at, user_role, is_member
+			WHERE g.title LIKE ? OR g.description LIKE ? OR g.category LIKE ?
+			GROUP BY g.id, g.owner_user_id, g.title, g.description, g.category, g.created_at, user_role, is_member
 			ORDER BY g.created_at DESC LIMIT 100
 		`
-		args = []interface{}{sess.UserID, sess.UserID, sess.UserID, "%" + search + "%", "%" + search + "%"}
+		args = []interface{}{sess.UserID, sess.UserID, sess.UserID, "%" + search + "%", "%" + search + "%", "%" + search + "%"}
 	} else {
 		query = `
-			SELECT g.id, g.owner_user_id, g.title, g.description, g.created_at,
+			SELECT g.id, g.owner_user_id, g.title, g.description, g.category, g.created_at,
 			       COUNT(gm.user_id) as member_count,
 			       CASE WHEN g.owner_user_id = ? THEN 'owner' ELSE gm.role END as user_role,
 			       CASE WHEN g.owner_user_id = ? OR gm.user_id IS NOT NULL THEN 1 ELSE 0 END as is_member
 			FROM groups g
 			LEFT JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = ?
-			GROUP BY g.id, g.owner_user_id, g.title, g.description, g.created_at, user_role, is_member
+			GROUP BY g.id, g.owner_user_id, g.title, g.description, g.category, g.created_at, user_role, is_member
 			ORDER BY g.created_at DESC LIMIT 100
 		`
 		args = []interface{}{sess.UserID, sess.UserID, sess.UserID}
@@ -103,15 +128,29 @@ func (h *GroupsHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type g struct {
-		ID, OwnerID, Title, Description, CreatedAt string
-		MemberCount                                int    `json:"member_count"`
-		UserRole                                   string `json:"user_role"`
-		IsMember                                   int    `json:"is_member"`
+		ID, OwnerID, Title, Description, Category, CreatedAt string
+		MemberCount                                          int      `json:"member_count"`
+		UserRole                                             string   `json:"user_role"`
+		IsMember                                             int      `json:"is_member"`
+		Tags                                                 []string `json:"tags"`
 	}
 	var out []g
 	for rows.Next() {
 		var x g
-		_ = rows.Scan(&x.ID, &x.OwnerID, &x.Title, &x.Description, &x.CreatedAt, &x.MemberCount, &x.UserRole, &x.IsMember)
+		_ = rows.Scan(&x.ID, &x.OwnerID, &x.Title, &x.Description, &x.Category, &x.CreatedAt, &x.MemberCount, &x.UserRole, &x.IsMember)
+
+		// Fetch tags for this group
+		tagRows, err := h.DB.Query("SELECT tag FROM group_tags WHERE group_id = ? ORDER BY tag", x.ID)
+		if err == nil {
+			defer tagRows.Close()
+			for tagRows.Next() {
+				var tag string
+				if err := tagRows.Scan(&tag); err == nil {
+					x.Tags = append(x.Tags, tag)
+				}
+			}
+		}
+
 		out = append(out, x)
 	}
 	_ = json.NewEncoder(w).Encode(out)
@@ -358,6 +397,177 @@ func (h *GroupsHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		out = append(out, m)
 	}
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// GetGroupAnalytics returns analytics for a group
+func (h *GroupsHandler) GetGroupAnalytics(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+
+	// Check if user is owner or member
+	var isOwner, isMember bool
+	_ = h.DB.QueryRow("SELECT owner_user_id = ? FROM groups WHERE id = ?", sess.UserID, gid).Scan(&isOwner)
+	_ = h.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?)", gid, sess.UserID).Scan(&isMember)
+
+	if !isOwner && !isMember {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Get member count
+	var memberCount int
+	_ = h.DB.QueryRow("SELECT COUNT(*) FROM group_members WHERE group_id = ?", gid).Scan(&memberCount)
+
+	// Get posts count
+	var postsCount int
+	_ = h.DB.QueryRow("SELECT COUNT(*) FROM group_posts WHERE group_id = ?", gid).Scan(&postsCount)
+
+	// Get events count
+	var eventsCount int
+	_ = h.DB.QueryRow("SELECT COUNT(*) FROM events WHERE group_id = ?", gid).Scan(&eventsCount)
+
+	// Get recent activity (last 7 days)
+	var recentPosts int
+	_ = h.DB.QueryRow("SELECT COUNT(*) FROM group_posts WHERE group_id = ? AND created_at > datetime('now', '-7 days')", gid).Scan(&recentPosts)
+
+	var recentComments int
+	_ = h.DB.QueryRow(`
+		SELECT COUNT(*) FROM group_comments gc 
+		JOIN group_posts gp ON gp.id = gc.group_post_id 
+		WHERE gp.group_id = ? AND gc.created_at > datetime('now', '-7 days')
+	`, gid).Scan(&recentComments)
+
+	analytics := map[string]interface{}{
+		"member_count":    memberCount,
+		"posts_count":     postsCount,
+		"events_count":    eventsCount,
+		"recent_posts":    recentPosts,
+		"recent_comments": recentComments,
+		"activity_score":  recentPosts + recentComments, // Simple activity score
+	}
+
+	_ = json.NewEncoder(w).Encode(analytics)
+}
+
+// UpdateMemberRole updates a member's role in the group
+func (h *GroupsHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	userID := chi.URLParam(r, "userId")
+
+	// Check if current user is owner
+	var isOwner bool
+	_ = h.DB.QueryRow("SELECT owner_user_id = ? FROM groups WHERE id = ?", sess.UserID, gid).Scan(&isOwner)
+	if !isOwner {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body struct {
+		Role string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Validate role
+	if body.Role != "admin" && body.Role != "member" {
+		http.Error(w, "invalid role", http.StatusBadRequest)
+		return
+	}
+
+	// Update role
+	_, err := h.DB.Exec("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?",
+		body.Role, gid, userID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}
+
+// RemoveMember removes a member from the group
+func (h *GroupsHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	gid := chi.URLParam(r, "id")
+	userID := chi.URLParam(r, "userId")
+
+	// Check if current user is owner
+	var isOwner bool
+	_ = h.DB.QueryRow("SELECT owner_user_id = ? FROM groups WHERE id = ?", sess.UserID, gid).Scan(&isOwner)
+	if !isOwner {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Can't remove the owner
+	if userID == sess.UserID {
+		http.Error(w, "cannot remove owner", http.StatusBadRequest)
+		return
+	}
+
+	// Remove member
+	_, err := h.DB.Exec("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", gid, userID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "removed"})
+}
+
+// GetGroupCategories returns available group categories
+func (h *GroupsHandler) GetGroupCategories(w http.ResponseWriter, r *http.Request) {
+	categories := []string{
+		"general", "technology", "photography", "fitness", "books",
+		"music", "art", "travel", "food", "gaming", "education",
+		"business", "sports", "health", "lifestyle", "entertainment",
+	}
+	_ = json.NewEncoder(w).Encode(categories)
+}
+
+// GetPopularTags returns popular group tags
+func (h *GroupsHandler) GetPopularTags(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.DB.Query(`
+		SELECT tag, COUNT(*) as count 
+		FROM group_tags 
+		GROUP BY tag 
+		ORDER BY count DESC 
+		LIMIT 20
+	`)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type tagCount struct {
+		Tag   string `json:"tag"`
+		Count int    `json:"count"`
+	}
+
+	var tags []tagCount
+	for rows.Next() {
+		var tc tagCount
+		_ = rows.Scan(&tc.Tag, &tc.Count)
+		tags = append(tags, tc)
+	}
+
+	_ = json.NewEncoder(w).Encode(tags)
 }
 
 // List sent invitations by the current user

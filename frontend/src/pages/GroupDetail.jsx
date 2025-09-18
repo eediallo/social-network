@@ -6,6 +6,10 @@ import { useUser } from '../context/useUser';
 import UserSearch from '../components/UserSearch';
 import JoinRequests from '../components/JoinRequests';
 import GroupEvents from '../components/GroupEvents';
+import GroupPostComposer from '../components/GroupPostComposer';
+import GroupPost from '../components/GroupPost';
+import GroupAnalytics from '../components/GroupAnalytics';
+import MemberManagement from '../components/MemberManagement';
 
 export default function GroupDetail() {
   const { id } = useParams();
@@ -412,6 +416,22 @@ export default function GroupDetail() {
         >
           Members
         </button>
+        {isMember && (
+          <button 
+            className={`tab-button ${activeTab === 'analytics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analytics')}
+          >
+            Analytics
+          </button>
+        )}
+        {isOwner && (
+          <button 
+            className={`tab-button ${activeTab === 'management' ? 'active' : ''}`}
+            onClick={() => setActiveTab('management')}
+          >
+            Management
+          </button>
+        )}
         {isOwner && (
           <button 
             className={`tab-button ${activeTab === 'requests' ? 'active' : ''}`}
@@ -427,12 +447,12 @@ export default function GroupDetail() {
         {activeTab === 'posts' && (
           <div className="group-posts">
             {isMember && (
-              <div className="card mb-4">
-                <div className="card-body">
-                  <h4>Create Post</h4>
-                  <p>Group posts functionality coming soon...</p>
-                </div>
-              </div>
+              <GroupPostComposer
+                groupId={id}
+                onPostCreated={(newPost) => {
+                  setPosts(prev => [newPost, ...prev]);
+                }}
+              />
             )}
             
             {posts.length === 0 ? (
@@ -444,24 +464,11 @@ export default function GroupDetail() {
               </div>
             ) : (
               posts.map(post => (
-                <div key={post.id} className="post">
-                  <div className="post-header">
-                    <div className="post-avatar">
-                      {getInitials(post.first_name, post.last_name)}
-                    </div>
-                    <div className="post-author">
-                      <span className="post-author-name">
-                        {post.first_name} {post.last_name}
-                      </span>
-                      <div className="post-meta">
-                        <span>{formatRelativeTime(post.created_at)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="post-content">
-                    <div className="post-text">{post.text}</div>
-                  </div>
-                </div>
+                <GroupPost
+                  key={post.id}
+                  post={post}
+                  groupId={id}
+                />
               ))
             )}
           </div>
@@ -496,6 +503,14 @@ export default function GroupDetail() {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <GroupAnalytics groupId={id} />
+        )}
+
+        {activeTab === 'management' && (
+          <MemberManagement groupId={id} isOwner={isOwner} />
         )}
 
         {activeTab === 'requests' && (

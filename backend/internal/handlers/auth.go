@@ -63,6 +63,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// create profile
 	_, _ = h.DB.Exec(`INSERT INTO profiles(user_id, public, nickname, about) VALUES(?,?,?,?)`, id, 1, req.Nickname, req.About)
 
+	// create session and set cookie (same as login)
+	sess, err := auth.CreateSession(h.DB, id, 7*24*time.Hour, r.UserAgent(), r.RemoteAddr)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	auth.SetSessionCookie(w, sess)
+
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(userResponse{ID: id, Email: req.Email, FirstName: req.FirstName, LastName: req.LastName})
 }

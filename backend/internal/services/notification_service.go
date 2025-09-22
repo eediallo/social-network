@@ -32,11 +32,11 @@ func NewNotificationService(db *sql.DB, hub *websocket.Hub) *NotificationService
 
 // CreateNotification creates a notification and broadcasts it via WebSocket
 func (ns *NotificationService) CreateNotification(data NotificationData) error {
-	// Insert notification into database (without message and action_url columns)
+	// Insert notification into database with message and action_url
 	_, err := ns.DB.Exec(`
-		INSERT INTO notifications (type, actor_user_id, subject_id, user_id, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, data.Type, data.ActorUserID, data.SubjectID, data.UserID, time.Now())
+		INSERT INTO notifications (type, actor_user_id, subject_id, user_id, message, action_url, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, data.Type, data.ActorUserID, data.SubjectID, data.UserID, data.Message, data.ActionURL, time.Now())
 
 	if err != nil {
 		log.Printf("Error creating notification: %v", err)

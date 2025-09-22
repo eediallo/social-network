@@ -24,6 +24,7 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Enhanced query to get notification details with actor and subject information
 	rows, err := h.DB.Query(`
 		SELECT n.id, n.type, n.actor_user_id, n.subject_id, n.created_at, n.read_at,
+		       n.message, n.action_url,
 		       u.first_name, u.last_name,
 		       CASE 
 		         WHEN n.type = 'group_invite' THEN g.title
@@ -69,11 +70,11 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var n notification
 		var firstName, lastName, subjectTitle string
-		var readAt sql.NullString
+		var readAt, message, actionURL sql.NullString
 
-		// Scan all 9 columns
+		// Scan all 11 columns
 		err := rows.Scan(&n.ID, &n.Type, &n.ActorID, &n.SubjectID, &n.CreatedAt, &readAt,
-			&firstName, &lastName, &subjectTitle)
+			&message, &actionURL, &firstName, &lastName, &subjectTitle)
 		if err != nil {
 			// Handle scan error silently in production
 			continue
@@ -84,49 +85,81 @@ func (h *NotificationsHandler) List(w http.ResponseWriter, r *http.Request) {
 			n.ReadAt = readAt.String
 		}
 
-		// Debug logging removed for production
+		// Use stored message and action_url if available, otherwise generate them
+		if message.Valid && message.String != "" {
+			n.Message = message.String
+		} else {
+			// Fallback to generated message
+			if firstName != "" && lastName != "" {
+				n.ActorName = firstName + " " + lastName
+			} else {
+				n.ActorName = "Unknown User"
+			}
 
-		// Build actor name
+			// Build subject title
+			if subjectTitle != "" {
+				n.SubjectTitle = subjectTitle
+			}
+
+			// Generate message based on notification type
+			switch n.Type {
+			case "group_invite":
+				n.Message = n.ActorName + " invited you to join " + n.SubjectTitle
+			case "group_join_request":
+				n.Message = n.ActorName + " wants to join " + n.SubjectTitle
+			case "group_join_accepted":
+				n.Message = "Your request to join " + n.SubjectTitle + " was accepted"
+			case "group_join_declined":
+				n.Message = "Your request to join " + n.SubjectTitle + " was declined"
+			case "follow_request":
+				n.Message = n.ActorName + " wants to follow you"
+			case "follow_accepted":
+				n.Message = n.ActorName + " accepted your follow request"
+			case "comment":
+				n.Message = n.ActorName + " commented on your post"
+			case "message":
+				n.Message = n.ActorName + " sent you a message"
+			default:
+				n.Message = "You have a new notification"
+			}
+		}
+
+		if actionURL.Valid && actionURL.String != "" {
+			n.ActionURL = actionURL.String
+		} else {
+			// Fallback to generated action URL
+			switch n.Type {
+			case "group_invite":
+				n.ActionURL = "/invitations"
+			case "group_join_request":
+				n.ActionURL = "/groups/" + n.SubjectID + "?tab=requests"
+			case "group_join_accepted":
+				n.ActionURL = "/groups/" + n.SubjectID
+			case "group_join_declined":
+				n.ActionURL = "/groups"
+			case "follow_request":
+				n.ActionURL = "/requests"
+			case "follow_accepted":
+				n.ActionURL = "/profile/" + n.ActorID
+			case "comment":
+				n.ActionURL = "/feed"
+			case "message":
+				n.ActionURL = "/messages?user=" + n.ActorID
+			default:
+				n.ActionURL = "/notifications"
+			}
+		}
+
+		// Build actor name for display
 		if firstName != "" && lastName != "" {
 			n.ActorName = firstName + " " + lastName
 		} else {
 			n.ActorName = "Unknown User"
 		}
 
-		// Build subject title
+		// Build subject title for display
 		if subjectTitle != "" {
 			n.SubjectTitle = subjectTitle
-		}
-
-		// Generate message and action URL based on notification type
-		switch n.Type {
-		case "group_invite":
-			n.Message = n.ActorName + " invited you to join " + n.SubjectTitle
-			n.ActionURL = "/invitations"
-		case "group_join_request":
-			n.Message = n.ActorName + " wants to join " + n.SubjectTitle
-			n.ActionURL = "/groups/" + n.SubjectID + "?tab=requests"
-		case "group_join_accepted":
-			n.Message = "Your request to join " + n.SubjectTitle + " was accepted"
-			n.ActionURL = "/groups/" + n.SubjectID
-		case "group_join_declined":
-			n.Message = "Your request to join " + n.SubjectTitle + " was declined"
-			n.ActionURL = "/groups"
-		case "follow_request":
-			n.Message = n.ActorName + " wants to follow you"
-			n.ActionURL = "/profile?tab=followers"
-		case "follow_accepted":
-			n.Message = n.ActorName + " accepted your follow request"
-			n.ActionURL = "/profile"
-		case "comment":
-			n.Message = n.ActorName + " commented on your post"
-			n.ActionURL = "/feed"
-		case "message":
-			n.Message = n.ActorName + " sent you a message"
-			n.ActionURL = "/messages?user=" + n.ActorID
-		default:
-			n.Message = "You have a new notification"
-			n.ActionURL = "/notifications"
 		}
 
 		out = append(out, n)

@@ -37,8 +37,8 @@ COPY --from=builder /app/server .
 # Copy migrations directory
 COPY --from=builder /app/internal/db/migrations ./internal/db/migrations
 
-# Copy any static files if needed
-COPY --from=builder /app/internal/images ./internal/images
+    # Copy any static files if needed (only if directory exists and is not empty)
+    # COPY --from=builder /app/internal/images ./internal/images
 
 # Expose port
 EXPOSE 8080

@@ -3361,6 +3361,102 @@
   color: var(--success-color);
 }
 
+/* Emoji Picker */
+.emoji-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.emoji-picker-header {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-light);
+}
+
+.emoji-search {
+  flex: 1;
+  padding: var(--spacing-xs);
+  border: 1px solid var(--border-light);
+  border-radius: var(--border-radius-sm);
+  font-size: 0.9rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.emoji-search:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.emoji-close {
+  margin-left: var(--spacing-sm);
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: var(--spacing-xs);
+}
+
+.emoji-close:hover {
+  color: var(--text-primary);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: var(--spacing-sm);
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.emoji-button {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  padding: var(--spacing-xs);
+  cursor: pointer;
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.2s;
+}
+
+.emoji-button:hover {
+  background: var(--bg-light);
+}
+
+.chat-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.emoji-toggle {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.2s;
+}
+
+.emoji-toggle:hover {
+  background: var(--bg-light);
+}
+
 .chat-input-form {
   padding: var(--spacing-md);
   border-top: 1px solid var(--border-light);

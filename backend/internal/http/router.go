@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"time"
 
 	"social-network/backend/internal/auth"
 	"social-network/backend/internal/config"
@@ -24,9 +25,19 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	// Set body size limit for file uploads (10MB)
+	r.Use(middleware.ThrottleBacklog(100, 1000, time.Second*60))
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Set max body size to 10MB for image uploads
+			r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	// CORS middleware
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173"},
+		AllowedOrigins:   []string{"http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -38,6 +49,12 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.Use(auth.LoadSession(db))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Health endpoint hit: %s %s", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
@@ -83,7 +100,11 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.Get("/images/{filename}", func(w http.ResponseWriter, r *http.Request) {
 		filename := chi.URLParam(r, "filename")
 		// Set CORS headers for static files
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		origin := r.Header.Get("Origin")
+		if origin == "http://localhost:5173" || origin == "http://127.0.0.1:5173" ||
+			origin == "http://localhost:3000" || origin == "http://127.0.0.1:3000" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Expose-Headers", "Link")
 		http.ServeFile(w, r, "internal/images/"+filename)

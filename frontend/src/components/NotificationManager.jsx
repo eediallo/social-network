@@ -15,7 +15,7 @@ export default function NotificationManager() {
     const connectWebSocket = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       
-      const wsUrl = `${protocol}//localhost:8080/ws`;
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
       
       console.log('Connecting to WebSocket for notifications:', wsUrl);
       const websocket = new WebSocket(wsUrl);

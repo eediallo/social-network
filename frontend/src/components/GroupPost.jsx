@@ -26,10 +26,16 @@ export default function GroupPost({ post, groupId, onPostUpdated, onPostDeleted 
         });
         if (res.ok) {
           const data = await res.json();
-          setCommentCount(data.length);
+          // Handle null response or ensure data is an array
+          if (data === null || !Array.isArray(data)) {
+            setCommentCount(0);
+          } else {
+            setCommentCount(data.length);
+          }
         }
       } catch (err) {
         console.error('Error loading comment count:', err);
+        setCommentCount(0);
       }
     };
     loadCommentCount();

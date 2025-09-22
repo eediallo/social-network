@@ -27,9 +27,24 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// Allow connections from frontend
+		// Allow connections from frontend (both dev and production)
 		origin := r.Header.Get("Origin")
-		return origin == "http://localhost:5173" || origin == "http://127.0.0.1:5173"
+		allowedOrigins := []string{
+			"http://localhost:5173", // Vite dev server
+			"http://127.0.0.1:5173", // Vite dev server (alternative)
+			"http://localhost:3000", // Docker production frontend
+			"http://127.0.0.1:3000", // Docker production frontend (alternative)
+		}
+
+		for _, allowedOrigin := range allowedOrigins {
+			if origin == allowedOrigin {
+				return true
+			}
+		}
+
+		// Log rejected origins for debugging
+		log.Printf("WebSocket connection rejected from origin: %s", origin)
+		return false
 	},
 }
 

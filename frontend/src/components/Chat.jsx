@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
 import NewConversation from './NewConversation';
+import EmojiPicker from './EmojiPicker';
 import API_BASE_URL from '../config/api';
 import { useUser } from '../context/useUser';
 
@@ -19,6 +20,7 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
   const [messageStatus, setMessageStatus] = useState({}); // Track message delivery status
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
@@ -199,7 +201,7 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
     // Connect to backend server on port 8080, not frontend dev server
     const messageType = type || 'direct';
     
-    const wsUrl = `${protocol}//localhost:8080/ws?group=${messageType === 'group' ? targetId : ''}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws?group=${messageType === 'group' ? targetId : ''}`;
     
     console.log('Connecting to WebSocket:', wsUrl);
     
@@ -447,6 +449,15 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
     }
   };
 
+  const handleEmojiSelect = (emoji) => {
+    setNewMessage(prev => prev + emoji);
+    setShowEmojiPicker(false);
+  };
+
+  const toggleEmojiPicker = () => {
+    setShowEmojiPicker(!showEmojiPicker);
+  };
+
   if (targetId === 'new') {
     return <NewConversation onClose={onClose} onSelectConversation={onSelectConversation} />;
   }
@@ -579,13 +590,30 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
       </div>
 
       <form onSubmit={sendMessage} className="chat-input-form">
-        <input
-          type="text"
-          value={newMessage}
-          onChange={handleTyping}
-          placeholder="Type a message..."
-          className="chat-input"
-        />
+        <div className="chat-input-container">
+          <input
+            type="text"
+            value={newMessage}
+            onChange={handleTyping}
+            placeholder="Type a message..."
+            className="chat-input"
+          />
+          <button
+            type="button"
+            onClick={toggleEmojiPicker}
+            className="emoji-toggle"
+            title="Add emoji"
+          >
+            😀
+          </button>
+          {showEmojiPicker && (
+            <EmojiPicker
+              onEmojiSelect={handleEmojiSelect}
+              isOpen={showEmojiPicker}
+              onClose={() => setShowEmojiPicker(false)}
+            />
+          )}
+        </div>
         <button
           type="submit"
           className="chat-send-btn"

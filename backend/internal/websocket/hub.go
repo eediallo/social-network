@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 )
@@ -168,6 +169,53 @@ func (h *Hub) GetGroupClients(groupID string) []*Client {
 		return clients
 	}
 	return []*Client{}
+}
+
+// BroadcastTypingIndicator sends a typing indicator to specific users
+func (h *Hub) BroadcastTypingIndicator(senderID, recipientID string, isTyping bool, messageType string) {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	typingMessage := map[string]interface{}{
+		"type":         "typing",
+		"sender_id":    senderID,
+		"is_typing":    isTyping,
+		"message_type": messageType,
+	}
+
+	if messageType == "group" {
+		typingMessage["group_id"] = recipientID
+	} else {
+		typingMessage["recipient_id"] = recipientID
+	}
+
+	messageBytes, _ := json.Marshal(typingMessage)
+
+	if messageType == "group" {
+		// Send to all clients in the group except the sender
+		if clients, ok := h.groupClients[recipientID]; ok {
+			for _, client := range clients {
+				if client.userID != senderID {
+					select {
+					case client.send <- messageBytes:
+					default:
+						// Client is not ready, skip
+					}
+				}
+			}
+		}
+	} else {
+		// Send to the specific recipient
+		if clients, ok := h.userClients[recipientID]; ok {
+			for _, client := range clients {
+				select {
+				case client.send <- messageBytes:
+				default:
+					// Client is not ready, skip
+				}
+			}
+		}
+	}
 }
 
 // BroadcastNotification sends a notification to a specific user

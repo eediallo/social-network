@@ -16,7 +16,11 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
   const [editText, setEditText] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [messageStatus, setMessageStatus] = useState({}); // Track message delivery status
   const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   console.log('Chat component - type:', type, 'targetId:', targetId, 'targetName:', targetName);
 
@@ -211,17 +215,76 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
     websocket.onmessage = (event) => {
       try {
         console.log('Raw WebSocket message:', event.data);
-        const message = JSON.parse(event.data);
-        console.log('Parsed WebSocket message:', message);
-        const messageType = type || 'direct';
-        console.log('Message type check:', message.type, '===', messageType);
-        console.log('Target ID check:', message.recipient_id, '===', targetId, 'OR', message.sender_id, '===', targetId);
+        const data = JSON.parse(event.data);
+        console.log('Parsed WebSocket message:', data);
         
-        if (message.type === messageType && 
-            (messageType === 'group' ? message.group_id === targetId : 
-             message.recipient_id === targetId || message.sender_id === targetId)) {
+        // Handle different message types
+        if (data.type === 'notification') {
+          // Handle notification messages
+          console.log('Received notification:', data.notification);
+          // You can dispatch this to a notification context if needed
+          return;
+        }
+        
+        if (data.type === 'typing') {
+          // Handle typing indicators
+          console.log('Received typing indicator:', data);
+          const messageType = type || 'direct';
+          
+          if (messageType === 'group' && data.group_id === targetId) {
+            // Group typing indicator
+            if (data.is_typing) {
+              setTypingUsers(prev => {
+                const newUsers = [...prev];
+                if (!newUsers.includes(data.sender_name)) {
+                  newUsers.push(data.sender_name);
+                }
+                return newUsers;
+              });
+            } else {
+              setTypingUsers(prev => prev.filter(user => user !== data.sender_name));
+            }
+          } else if (messageType === 'direct' && data.recipient_id === user?.id) {
+            // Direct message typing indicator
+            if (data.is_typing) {
+              setTypingUsers(prev => {
+                const newUsers = [...prev];
+                if (!newUsers.includes(data.sender_name)) {
+                  newUsers.push(data.sender_name);
+                }
+                return newUsers;
+              });
+            } else {
+              setTypingUsers(prev => prev.filter(user => user !== data.sender_name));
+            }
+          }
+          return;
+        }
+        
+        const messageType = type || 'direct';
+        const message = data;
+        
+        // Check if this is a message for the current conversation
+        let shouldAddMessage = false;
+        
+        if (messageType === 'group') {
+          // For group messages, check if group_id matches
+          shouldAddMessage = message.type === 'group' && message.group_id === targetId;
+        } else {
+          // For direct messages, check if it's between the current users
+          shouldAddMessage = message.type === 'direct' && 
+            ((message.recipient_id === targetId && message.sender_id === user?.id) ||
+             (message.sender_id === targetId && message.recipient_id === user?.id));
+        }
+        
+        if (shouldAddMessage) {
           console.log('Message matches criteria, adding to messages');
-          addMessage(message);
+          // Add is_from_me flag for proper rendering
+          const messageWithFlag = {
+            ...message,
+            is_from_me: message.sender_id === user?.id
+          };
+          addMessage(messageWithFlag);
         } else {
           console.log('Message does not match criteria, ignoring');
         }
@@ -271,6 +334,12 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
       return;
     }
 
+    // Clear typing indicator
+    setIsTyping(false);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
     try {
       // Default to 'direct' if type is undefined
       const messageType = type || 'direct';
@@ -309,6 +378,13 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
           is_from_me: true
         };
         addMessage(newMsg);
+        
+        // Update message status
+        setMessageStatus(prev => ({
+          ...prev,
+          [responseData.id]: 'sent'
+        }));
+        
         setNewMessage('');
       } else {
         const errorText = await res.text();
@@ -316,6 +392,58 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
       }
     } catch (err) {
       console.error('Error sending message:', err);
+    }
+  };
+
+  const sendTypingIndicator = (isTyping) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const messageType = type || 'direct';
+      const typingMessage = {
+        type: 'typing',
+        sender_id: user?.id,
+        is_typing: isTyping,
+        message_type: messageType
+      };
+      
+      if (messageType === 'group') {
+        typingMessage.group_id = targetId;
+      } else {
+        typingMessage.recipient_id = targetId;
+      }
+      
+      ws.send(JSON.stringify(typingMessage));
+    }
+  };
+
+  const handleTyping = (e) => {
+    const value = e.target.value;
+    setNewMessage(value);
+    
+    // Send typing indicator
+    if (value.trim() && ws && ws.readyState === WebSocket.OPEN) {
+      if (!isTyping) {
+        setIsTyping(true);
+        sendTypingIndicator(true);
+      }
+      
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Set new timeout to stop typing indicator
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsTyping(false);
+        sendTypingIndicator(false);
+      }, 1000);
+    } else {
+      if (isTyping) {
+        setIsTyping(false);
+        sendTypingIndicator(false);
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     }
   };
 
@@ -349,9 +477,14 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
             <h3>{targetName}</h3>
             <div className="chat-status">
               {connected ? (
-                <span className="status-online">Online</span>
+                <span className="status-online">🟢 Online</span>
               ) : (
-                <span className="status-offline">Offline (messages will be delivered when they come online)</span>
+                <span className="status-offline">🔴 Offline (messages will be delivered when they come online)</span>
+              )}
+              {typingUsers.length > 0 && (
+                <span className="typing-indicator">
+                  {typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
+                </span>
               )}
             </div>
           </div>
@@ -449,7 +582,7 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
         <input
           type="text"
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={handleTyping}
           placeholder="Type a message..."
           className="chat-input"
         />

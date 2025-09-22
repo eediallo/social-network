@@ -52,7 +52,7 @@ type Client struct {
 
 // Message represents a chat message
 type Message struct {
-	Type        string `json:"type"` // "direct", "group", "notification"
+	Type        string `json:"type"` // "direct", "group", "notification", "typing"
 	ID          string `json:"id"`
 	SenderID    string `json:"sender_id"`
 	SenderName  string `json:"sender_name,omitempty"`
@@ -61,6 +61,7 @@ type Message struct {
 	Content     string `json:"content"`
 	CreatedAt   string `json:"created_at"`
 	ReadAt      string `json:"read_at,omitempty"`
+	IsTyping    bool   `json:"is_typing,omitempty"`
 }
 
 // Notification represents a system notification

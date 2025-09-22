@@ -468,6 +468,14 @@ export default function GroupDetail() {
                   key={post.id}
                   post={post}
                   groupId={id}
+                  onPostUpdated={(updatedPost) => {
+                    setPosts(prev => prev.map(p => 
+                      p.id === updatedPost.id ? updatedPost : p
+                    ));
+                  }}
+                  onPostDeleted={(postId) => {
+                    setPosts(prev => prev.filter(p => p.id !== postId));
+                  }}
                 />
               ))
             )}

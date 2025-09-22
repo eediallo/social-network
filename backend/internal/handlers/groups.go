@@ -860,3 +860,31 @@ func (h *GroupsHandler) HandleJoinRequest(w http.ResponseWriter, r *http.Request
 
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": newStatus})
 }
+
+// CancelJoinRequest allows users to cancel their own pending join requests
+func (h *GroupsHandler) CancelJoinRequest(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	gid := chi.URLParam(r, "id")
+
+	// Check if user has a pending request for this group
+	var requestID string
+	err := h.DB.QueryRow("SELECT id FROM group_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'", gid, sess.UserID).Scan(&requestID)
+	if err != nil {
+		http.Error(w, "no pending request found", http.StatusNotFound)
+		return
+	}
+
+	// Delete the request
+	_, err = h.DB.Exec("DELETE FROM group_requests WHERE id = ?", requestID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Join request cancelled successfully"})
+}

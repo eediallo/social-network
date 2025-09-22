@@ -553,3 +553,143 @@ func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 
 	_ = json.NewEncoder(w).Encode(conversations)
 }
+
+// UpdateDirectMessage updates a direct message (only by the sender)
+func (h *ChatHandler) UpdateDirectMessage(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	messageID := chi.URLParam(r, "messageId")
+
+	// Check if user owns this message
+	var ownerID string
+	err := h.DB.QueryRow("SELECT from_user_id FROM direct_messages WHERE id = ?", messageID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body sendMessageReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Update the message
+	_, err = h.DB.Exec("UPDATE direct_messages SET text = ? WHERE id = ?", body.Content, messageID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Message updated successfully"})
+}
+
+// DeleteDirectMessage deletes a direct message (only by the sender)
+func (h *ChatHandler) DeleteDirectMessage(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	messageID := chi.URLParam(r, "messageId")
+
+	// Check if user owns this message
+	var ownerID string
+	err := h.DB.QueryRow("SELECT from_user_id FROM direct_messages WHERE id = ?", messageID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Delete the message
+	_, err = h.DB.Exec("DELETE FROM direct_messages WHERE id = ?", messageID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Message deleted successfully"})
+}
+
+// UpdateGroupMessage updates a group message (only by the sender)
+func (h *ChatHandler) UpdateGroupMessage(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	messageID := chi.URLParam(r, "messageId")
+
+	// Check if user owns this message
+	var ownerID string
+	err := h.DB.QueryRow("SELECT from_user_id FROM group_messages WHERE id = ?", messageID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body sendMessageReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Content == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Update the message
+	_, err = h.DB.Exec("UPDATE group_messages SET text = ? WHERE id = ?", body.Content, messageID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Group message updated successfully"})
+}
+
+// DeleteGroupMessage deletes a group message (only by the sender)
+func (h *ChatHandler) DeleteGroupMessage(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	messageID := chi.URLParam(r, "messageId")
+
+	// Check if user owns this message
+	var ownerID string
+	err := h.DB.QueryRow("SELECT from_user_id FROM group_messages WHERE id = ?", messageID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Delete the message
+	_, err = h.DB.Exec("DELETE FROM group_messages WHERE id = ?", messageID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Group message deleted successfully"})
+}

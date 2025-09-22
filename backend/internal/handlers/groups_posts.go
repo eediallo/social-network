@@ -252,3 +252,179 @@ func (h *GroupPostsHandler) ListComments(w http.ResponseWriter, r *http.Request)
 
 	_ = json.NewEncoder(w).Encode(out)
 }
+
+// UpdateGroupPost updates a group post (only by the author)
+func (h *GroupPostsHandler) UpdateGroupPost(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	gid := chi.URLParam(r, "id")
+	postID := chi.URLParam(r, "postID")
+
+	// Check membership
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Check if user owns this post
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM group_posts WHERE id = ?", postID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body createGroupPostReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Text == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Update the post
+	_, err = h.DB.Exec("UPDATE group_posts SET text = ? WHERE id = ?", body.Text, postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Group post updated successfully"})
+}
+
+// DeleteGroupPost deletes a group post (only by the author)
+func (h *GroupPostsHandler) DeleteGroupPost(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	gid := chi.URLParam(r, "id")
+	postID := chi.URLParam(r, "postID")
+
+	// Check membership
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Check if user owns this post
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM group_posts WHERE id = ?", postID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Delete the post (cascade will handle related data)
+	_, err = h.DB.Exec("DELETE FROM group_posts WHERE id = ?", postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Group post deleted successfully"})
+}
+
+// UpdateGroupComment updates a group comment (only by the author)
+func (h *GroupPostsHandler) UpdateGroupComment(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	gid := chi.URLParam(r, "id")
+	commentID := chi.URLParam(r, "commentID")
+
+	// Check membership
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Check if user owns this comment
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM group_comments WHERE id = ?", commentID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body createGroupCommentReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Text == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Update the comment
+	_, err = h.DB.Exec("UPDATE group_comments SET text = ? WHERE id = ?", body.Text, commentID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Group comment updated successfully"})
+}
+
+// DeleteGroupComment deletes a group comment (only by the author)
+func (h *GroupPostsHandler) DeleteGroupComment(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	gid := chi.URLParam(r, "id")
+	commentID := chi.URLParam(r, "commentID")
+
+	// Check membership
+	var cnt int
+	_ = h.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ?", gid, sess.UserID).Scan(&cnt)
+	if cnt == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Check if user owns this comment
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM group_comments WHERE id = ?", commentID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Delete the comment (cascade will handle related data)
+	_, err = h.DB.Exec("DELETE FROM group_comments WHERE id = ?", commentID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Group comment deleted successfully"})
+}

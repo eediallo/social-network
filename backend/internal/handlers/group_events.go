@@ -320,3 +320,92 @@ func (h *GroupEventsHandler) notifyEventCreator(eventID, responderID, response s
 		`, uuid.NewString(), creatorID, "event_response", responderID, eventID)
 	}
 }
+
+// UpdateEvent updates a group event (only by the creator)
+func (h *GroupEventsHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventId")
+
+	// Check if user created this event
+	var creatorID string
+	err := h.DB.QueryRow("SELECT created_by FROM group_events WHERE id = ?", eventID).Scan(&creatorID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if creatorID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body createEventReq
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Title == "" || body.EventDate == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Parse and validate event date
+	eventDate, err := time.Parse("2006-01-02T15:04", body.EventDate)
+	if err != nil {
+		http.Error(w, "invalid date format", http.StatusBadRequest)
+		return
+	}
+
+	// Update the event
+	_, err = h.DB.Exec(`
+		UPDATE group_events 
+		SET title = ?, description = ?, event_date = ?, location = ?
+		WHERE id = ?
+	`, body.Title, body.Description, eventDate.Format("2006-01-02 15:04:05"), body.Location, eventID)
+
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Get group ID for notification
+	var groupID string
+	_ = h.DB.QueryRow("SELECT group_id FROM group_events WHERE id = ?", eventID).Scan(&groupID)
+
+	// Notify group members about the event update
+	h.notifyGroupMembers(groupID, sess.UserID, "group_event_updated", eventID)
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Event updated successfully"})
+}
+
+// DeleteEvent deletes a group event (only by the creator)
+func (h *GroupEventsHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	eventID := chi.URLParam(r, "eventId")
+
+	// Check if user created this event
+	var creatorID string
+	err := h.DB.QueryRow("SELECT created_by FROM group_events WHERE id = ?", eventID).Scan(&creatorID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if creatorID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Delete the event (cascade will handle related data)
+	_, err = h.DB.Exec("DELETE FROM group_events WHERE id = ?", eventID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Event deleted successfully"})
+}

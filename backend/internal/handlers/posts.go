@@ -547,3 +547,176 @@ func (h *PostsHandler) GetPostLikes(w http.ResponseWriter, r *http.Request) {
 		"is_liked": isLiked > 0,
 	})
 }
+
+// UpdatePost updates a post (only by the author)
+func (h *PostsHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	postID := r.URL.Query().Get("post_id")
+	if postID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user owns this post
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM posts WHERE id = ?", postID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body createPostRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if body.Text == "" || (body.Privacy != "public" && body.Privacy != "followers" && body.Privacy != "selected") {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Update the post
+	_, err = h.DB.Exec("UPDATE posts SET text = ?, privacy = ? WHERE id = ?", body.Text, body.Privacy, postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Update allowed followers for selected privacy
+	_, err = h.DB.Exec("DELETE FROM post_allowed_followers WHERE post_id = ?", postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	if body.Privacy == "selected" {
+		for _, uid := range body.Allowed {
+			_, _ = h.DB.Exec("INSERT OR IGNORE INTO post_allowed_followers(post_id, follower_user_id) VALUES(?,?)", postID, uid)
+		}
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Post updated successfully"})
+}
+
+// DeletePost deletes a post (only by the author)
+func (h *PostsHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	postID := r.URL.Query().Get("post_id")
+	if postID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user owns this post
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM posts WHERE id = ?", postID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Delete the post (cascade will handle related data)
+	_, err = h.DB.Exec("DELETE FROM posts WHERE id = ?", postID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Post deleted successfully"})
+}
+
+// UpdateComment updates a comment (only by the author)
+func (h *PostsHandler) UpdateComment(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	commentID := r.URL.Query().Get("comment_id")
+	if commentID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user owns this comment
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM comments WHERE id = ?", commentID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var body createCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Text == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Update the comment
+	_, err = h.DB.Exec("UPDATE comments SET text = ? WHERE id = ?", body.Text, commentID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Comment updated successfully"})
+}
+
+// DeleteComment deletes a comment (only by the author)
+func (h *PostsHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
+	sess, ok := auth.SessionFromContext(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	commentID := r.URL.Query().Get("comment_id")
+	if commentID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user owns this comment
+	var ownerID string
+	err := h.DB.QueryRow("SELECT user_id FROM comments WHERE id = ?", commentID).Scan(&ownerID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if ownerID != sess.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Delete the comment (cascade will handle related data)
+	_, err = h.DB.Exec("DELETE FROM comments WHERE id = ?", commentID)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Comment deleted successfully"})
+}

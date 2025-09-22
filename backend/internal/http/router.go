@@ -96,6 +96,10 @@ func NewRouter(db *sql.DB) http.Handler {
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/comments", postsHandler.ListComments)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/api/posts/like", postsHandler.LikePost)
 	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/api/posts/likes", postsHandler.GetPostLikes)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Put("/api/posts", postsHandler.UpdatePost)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/api/posts", postsHandler.DeletePost)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Put("/api/comments", postsHandler.UpdateComment)
+	r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/api/comments", postsHandler.DeleteComment)
 
 	followHandler := &handlers.FollowHandler{DB: db, NotificationService: notificationService}
 	r.Route("/api/follow", func(r chi.Router) {
@@ -150,6 +154,10 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/read/{messageId}", chatHandler.MarkMessageAsRead)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/conversations", chatHandler.GetConversations)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/group-conversations", chatHandler.GetGroupConversations)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Put("/direct/{messageId}", chatHandler.UpdateDirectMessage)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/direct/{messageId}", chatHandler.DeleteDirectMessage)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Put("/group/{messageId}", chatHandler.UpdateGroupMessage)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/group/{messageId}", chatHandler.DeleteGroupMessage)
 	})
 
 	groupsHandler := &handlers.GroupsHandler{DB: db, NotificationService: notificationService}
@@ -162,10 +170,13 @@ func NewRouter(db *sql.DB) http.Handler {
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/invitations/{invID}/accept", groupsHandler.AcceptInvitation)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/invitations/{invID}/decline", groupsHandler.DeclineInvitation)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/requests", groupsHandler.RequestJoin)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/{id}/requests", groupsHandler.CancelJoinRequest)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/requests/{reqID}/accept", groupsHandler.AcceptRequest)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/requests/{reqID}/decline", groupsHandler.DeclineRequest)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/events", groupEventsHandler.CreateEvent)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/{id}/events", groupEventsHandler.ListEvents)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Put("/{id}/events/{eventId}", groupEventsHandler.UpdateEvent)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/{id}/events/{eventId}", groupEventsHandler.DeleteEvent)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/events/{eventId}/respond", groupEventsHandler.RespondToEvent)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/{id}/events/{eventId}/responses", groupEventsHandler.GetEventResponses)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/{id}/members", groupsHandler.ListMembers)
@@ -184,8 +195,12 @@ func NewRouter(db *sql.DB) http.Handler {
 		gp := &handlers.GroupPostsHandler{DB: db, CloudinarySvc: cloudinarySvc}
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/posts", gp.CreatePost)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/{id}/posts", gp.ListPosts)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Put("/{id}/posts/{postID}", gp.UpdateGroupPost)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/{id}/posts/{postID}", gp.DeleteGroupPost)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Post("/{id}/posts/{postID}/comments", gp.AddComment)
 		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Get("/{id}/posts/{postID}/comments", gp.ListComments)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Put("/{id}/posts/{postID}/comments/{commentID}", gp.UpdateGroupComment)
+		r.With(func(next http.Handler) http.Handler { return auth.RequireAuth(next, db) }).Delete("/{id}/posts/{postID}/comments/{commentID}", gp.DeleteGroupComment)
 	})
 
 	// Notifications

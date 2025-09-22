@@ -91,6 +91,16 @@ export default function Feed() {
     setPosts([newPost, ...posts]);
   };
 
+  const handlePostUpdated = (updatedPost) => {
+    setPosts(posts.map(post => 
+      post.id === updatedPost.id ? updatedPost : post
+    ));
+  };
+
+  const handlePostDeleted = (postId) => {
+    setPosts(posts.filter(post => post.id !== postId));
+  };
+
   if (loading) {
     return (
       <div className="container">
@@ -130,7 +140,12 @@ export default function Feed() {
         )}
         
         {posts.map((post) => (
-          <Post key={post.id} post={post} />
+          <Post 
+            key={post.id} 
+            post={post} 
+            onPostUpdated={handlePostUpdated}
+            onPostDeleted={handlePostDeleted}
+          />
         ))}
       </div>
     </div>

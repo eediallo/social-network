@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 import { formatRelativeTime, isValidDate } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
 import CommentComposer from './CommentComposer';
+import Comment from './Comment';
+import { useUser } from '../context/useUser';
 
-export default function Post({ post }) {
+export default function Post({ post, onPostUpdated, onPostDeleted }) {
+  const { user } = useUser();
   const [comments, setComments] = useState([]);
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
@@ -12,6 +15,12 @@ export default function Post({ post }) {
   const [isLiked, setIsLiked] = useState(false);
   const [images, setImages] = useState(post.images || []);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(post.text);
+  const [editPrivacy, setEditPrivacy] = useState(post.privacy);
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Load initial like status and comment count
   useEffect(() => {
@@ -54,6 +63,88 @@ export default function Post({ post }) {
     setComments(prev => [...prev, newComment]);
     setCommentCount(prev => prev + 1);
   };
+
+  const handleCommentUpdated = (updatedComment) => {
+    setComments(prev => 
+      prev.map(comment => 
+        comment.id === updatedComment.id ? updatedComment : comment
+      )
+    );
+  };
+
+  const handleCommentDeleted = (commentId) => {
+    setComments(prev => prev.filter(comment => comment.id !== commentId));
+    setCommentCount(prev => Math.max(0, prev - 1));
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    setEditText(post.text);
+    setEditPrivacy(post.privacy);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditText(post.text);
+    setEditPrivacy(post.privacy);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editText.trim()) return;
+    
+    setEditLoading(true);
+    try {
+      const res = await fetch(`/api/posts?post_id=${post.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          text: editText,
+          privacy: editPrivacy,
+          allowed_follower_ids: [] // For now, not implementing selected privacy in edit
+        })
+      });
+      
+      if (res.ok) {
+        const updatedPost = { ...post, text: editText, privacy: editPrivacy };
+        if (onPostUpdated) onPostUpdated(updatedPost);
+        setIsEditing(false);
+      } else {
+        console.error('Failed to update post');
+        alert('Failed to update post');
+      }
+    } catch (err) {
+      console.error('Error updating post:', err);
+      alert('Error updating post');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/posts?post_id=${post.id}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      
+      if (res.ok) {
+        if (onPostDeleted) onPostDeleted(post.id);
+      } else {
+        console.error('Failed to delete post');
+        alert('Failed to delete post');
+      }
+    } catch (err) {
+      console.error('Error deleting post:', err);
+      alert('Error deleting post');
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const isOwner = user && user.id === post.user_id;
 
   const handleLike = async () => {
     if (likeLoading) return;
@@ -154,26 +245,85 @@ export default function Post({ post }) {
             <span className="privacy-text">{post.privacy}</span>
           </div>
         </div>
+        
+        {isOwner && !isEditing && (
+          <div className="post-actions-menu">
+            <button
+              onClick={handleEdit}
+              className="post-action-btn"
+              title="Edit post"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="post-action-btn delete"
+              title="Delete post"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
       </div>
       
       <div className="post-content">
-        <div className="post-text">{post.text}</div>
-        
-        {images.length > 0 && (
-          <div className="post-images">
-            {images.map((image, index) => (
-              <img
-                key={image.id}
-                src={image.url}
-                alt={`Post image ${index + 1}`}
-                className="post-image"
-                loading="lazy"
-                onError={(e) => console.error('Image failed to load:', image.url, e)}
-              />
-            ))}
+        {isEditing ? (
+          <div className="post-edit">
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="post-edit-textarea"
+              placeholder="What's on your mind?"
+              rows="3"
+            />
+            <div className="post-edit-privacy">
+              <select
+                value={editPrivacy}
+                onChange={(e) => setEditPrivacy(e.target.value)}
+                className="post-edit-select"
+              >
+                <option value="public">🌍 Public</option>
+                <option value="followers">👥 Followers</option>
+                <option value="selected">👤 Selected</option>
+              </select>
+            </div>
+            <div className="post-edit-actions">
+              <button
+                onClick={handleSaveEdit}
+                disabled={editLoading || !editText.trim()}
+                className="btn btn-primary btn-sm"
+              >
+                {editLoading ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                disabled={editLoading}
+                className="btn btn-secondary btn-sm"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+        ) : (
+          <>
+            <div className="post-text">{post.text}</div>
+            
+            {images.length > 0 && (
+              <div className="post-images">
+                {images.map((image, index) => (
+                  <img
+                    key={image.id}
+                    src={image.url}
+                    alt={`Post image ${index + 1}`}
+                    className="post-image"
+                    loading="lazy"
+                    onError={(e) => console.error('Image failed to load:', image.url, e)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
-        
       </div>
       
       <div className="post-actions">
@@ -214,46 +364,42 @@ export default function Post({ post }) {
           />
           
           {comments.map((comment) => (
-            <div key={comment.id} className="comment">
-              <div className="comment-avatar">
-                {comment.avatar_url && comment.avatar_url.trim() !== '' ? (
-                  <img
-                    src={comment.avatar_url}
-                    alt={`${comment.first_name} ${comment.last_name}`}
-                    className="w-full h-full"
-                    style={{ borderRadius: '50%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  getInitials(comment.first_name, comment.last_name)
-                )}
-              </div>
-              <div className="comment-content">
-                <div className="comment-author">
-                  {comment.first_name} {comment.last_name}
-                </div>
-                <div className="comment-text">{comment.text}</div>
-                
-                {comment.images && comment.images.length > 0 && (
-                  <div className="comment-images">
-                    {comment.images.map((image, index) => (
-                      <img
-                        key={image.id}
-                        src={image.url}
-                        alt={`Comment image ${index + 1}`}
-                        className="comment-image"
-                        loading="lazy"
-                        onError={(e) => console.error('Comment image failed to load:', image.url, e)}
-                      />
-                    ))}
-                  </div>
-                )}
-                
-                <div className="comment-meta">
-                  {formatTime(comment.created_at)}
-                </div>
-              </div>
-            </div>
+            <Comment
+              key={comment.id}
+              comment={comment}
+              onCommentUpdated={handleCommentUpdated}
+              onCommentDeleted={handleCommentDeleted}
+            />
           ))}
+        </div>
+      )}
+      
+      {showDeleteConfirm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Delete Post</h3>
+            </div>
+            <div className="modal-body">
+              <p>Are you sure you want to delete this post? This action cannot be undone.</p>
+            </div>
+            <div className="modal-actions">
+              <button
+                onClick={handleDelete}
+                disabled={deleteLoading}
+                className="btn btn-danger"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete'}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

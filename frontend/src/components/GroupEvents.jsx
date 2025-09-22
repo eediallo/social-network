@@ -1,12 +1,24 @@
 import { useState, useEffect } from 'react';
 import { formatRelativeTime } from '../utils/dateUtils';
+import { useUser } from '../context/useUser';
 
 export default function GroupEvents({ groupId, isMember }) {
+  const { user } = useUser();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: '',
+    event_date: '',
+    location: ''
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   useEffect(() => {
     if (groupId) {
@@ -103,6 +115,86 @@ export default function GroupEvents({ groupId, isMember }) {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleEditEvent = (event) => {
+    setEditingEvent(event.id);
+    setEditForm({
+      title: event.title,
+      description: event.description || '',
+      event_date: event.event_date ? event.event_date.slice(0, 16) : '', // Format for datetime-local input
+      location: event.location || ''
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingEvent(null);
+    setEditForm({
+      title: '',
+      description: '',
+      event_date: '',
+      location: ''
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.title.trim() || !editForm.event_date) return;
+
+    setEditLoading(true);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/events/${editingEvent}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(editForm)
+      });
+
+      if (res.ok) {
+        setEvents(prev => prev.map(event => 
+          event.id === editingEvent 
+            ? { ...event, ...editForm }
+            : event
+        ));
+        setEditingEvent(null);
+        setEditForm({
+          title: '',
+          description: '',
+          event_date: '',
+          location: ''
+        });
+      } else {
+        console.error('Failed to update event');
+        alert('Failed to update event');
+      }
+    } catch (err) {
+      console.error('Error updating event:', err);
+      alert('Error updating event');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    setDeleteLoading(eventId);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/events/${eventId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (res.ok) {
+        setEvents(prev => prev.filter(event => event.id !== eventId));
+        setShowDeleteConfirm(null);
+      } else {
+        console.error('Failed to delete event');
+        alert('Failed to delete event');
+      }
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      alert('Error deleting event');
+    } finally {
+      setDeleteLoading(null);
+    }
   };
 
   if (loading) {
@@ -227,27 +319,115 @@ export default function GroupEvents({ groupId, isMember }) {
         </div>
       ) : (
         <div className="events-list">
-          {events.map(event => (
-            <div key={event.id} className="event-card">
-              <div className="event-header">
-                <h4 className="event-title">{event.title}</h4>
-                <div className="event-meta">
-                  <span className="event-creator">by {event.created_by_name}</span>
-                  <span className="event-date">{formatEventDate(event.event_date)}</span>
+          {events.map(event => {
+            const isOwner = user && event.created_by === user.id;
+            const isEditing = editingEvent === event.id;
+            
+            return (
+              <div key={event.id} className="event-card">
+                <div className="event-header">
+                  <h4 className="event-title">{event.title}</h4>
+                  <div className="event-meta">
+                    <span className="event-creator">by {event.created_by_name}</span>
+                    <span className="event-date">{formatEventDate(event.event_date)}</span>
+                    {isOwner && !isEditing && (
+                      <div className="event-actions">
+                        <button
+                          onClick={() => handleEditEvent(event)}
+                          className="event-action-btn"
+                          title="Edit event"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteConfirm(event.id)}
+                          className="event-action-btn delete"
+                          title="Delete event"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
               
-              {event.description && (
-                <div className="event-description">
-                  <p>{event.description}</p>
+              {isEditing ? (
+                <div className="event-edit">
+                  <div className="form-group">
+                    <label className="form-label">Event Title *</label>
+                    <input
+                      type="text"
+                      value={editForm.title}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                      className="form-input"
+                      required
+                      disabled={editLoading}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Description</label>
+                    <textarea
+                      value={editForm.description}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                      className="form-input form-textarea"
+                      rows="3"
+                      disabled={editLoading}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Date & Time *</label>
+                    <input
+                      type="datetime-local"
+                      value={editForm.event_date}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, event_date: e.target.value }))}
+                      className="form-input"
+                      required
+                      disabled={editLoading}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Location</label>
+                    <input
+                      type="text"
+                      value={editForm.location}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value }))}
+                      className="form-input"
+                      placeholder="e.g., Community Center, Online"
+                      disabled={editLoading}
+                    />
+                  </div>
+                  <div className="event-edit-actions">
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={editLoading || !editForm.title.trim() || !editForm.event_date}
+                      className="btn btn-primary btn-sm"
+                    >
+                      {editLoading ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      disabled={editLoading}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              )}
-              
-              {event.location && (
-                <div className="event-location">
-                  <span className="meta-icon">📍</span>
-                  <span>{event.location}</span>
-                </div>
+              ) : (
+                <>
+                  {event.description && (
+                    <div className="event-description">
+                      <p>{event.description}</p>
+                    </div>
+                  )}
+                  
+                  {event.location && (
+                    <div className="event-location">
+                      <span className="meta-icon">📍</span>
+                      <span>{event.location}</span>
+                    </div>
+                  )}
+                </>
               )}
               
               <div className="event-responses">
@@ -290,7 +470,38 @@ export default function GroupEvents({ groupId, isMember }) {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
+        </div>
+      )}
+      
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Delete Event</h3>
+            </div>
+            <div className="modal-body">
+              <p>Are you sure you want to delete this event? This action cannot be undone.</p>
+            </div>
+            <div className="modal-actions">
+              <button
+                onClick={() => handleDeleteEvent(showDeleteConfirm)}
+                disabled={deleteLoading === showDeleteConfirm}
+                className="btn btn-danger"
+              >
+                {deleteLoading === showDeleteConfirm ? 'Deleting...' : 'Delete'}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                disabled={deleteLoading === showDeleteConfirm}
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -3,13 +3,19 @@ import { formatRelativeTime } from '../utils/dateUtils';
 import { getInitials } from '../utils/avatarUtils';
 import NewConversation from './NewConversation';
 import API_BASE_URL from '../config/api';
+import { useUser } from '../context/useUser';
 
 export default function Chat({ type, targetId, targetName, onClose, onSelectConversation }) {
+  const { user } = useUser();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [ws, setWs] = useState(null);
   const [connected, setConnected] = useState(false);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(null);
   const messagesEndRef = useRef(null);
 
   console.log('Chat component - type:', type, 'targetId:', targetId, 'targetName:', targetName);
@@ -26,6 +32,83 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
       console.log('Adding new message:', newMessage.id);
       return [...prev, newMessage];
     });
+  };
+
+  // Edit message functions
+  const handleEditMessage = (message) => {
+    setEditingMessage(message.id);
+    setEditText(message.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditText('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editText.trim() || !editingMessage) return;
+
+    setEditLoading(true);
+    try {
+      const messageType = type || 'direct';
+      const endpoint = messageType === 'direct' 
+        ? `${API_BASE_URL}/api/chat/direct/${editingMessage}`
+        : `${API_BASE_URL}/api/chat/group/${editingMessage}`;
+
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ content: editText })
+      });
+
+      if (res.ok) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === editingMessage 
+            ? { ...msg, content: editText }
+            : msg
+        ));
+        setEditingMessage(null);
+        setEditText('');
+      } else {
+        console.error('Failed to update message');
+        alert('Failed to update message');
+      }
+    } catch (err) {
+      console.error('Error updating message:', err);
+      alert('Error updating message');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+
+    setDeleteLoading(messageId);
+    try {
+      const messageType = type || 'direct';
+      const endpoint = messageType === 'direct' 
+        ? `${API_BASE_URL}/api/chat/direct/${messageId}`
+        : `${API_BASE_URL}/api/chat/group/${messageId}`;
+
+      const res = await fetch(endpoint, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (res.ok) {
+        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      } else {
+        console.error('Failed to delete message');
+        alert('Failed to delete message');
+      }
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      alert('Error deleting message');
+    } finally {
+      setDeleteLoading(null);
+    }
   };
 
   useEffect(() => {
@@ -282,25 +365,82 @@ export default function Chat({ type, targetId, targetName, onClose, onSelectConv
             <p>No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          messages.map(message => (
-            <div
-              key={message.id}
-              className={`message ${message.is_from_me ? 'message-sent' : 'message-received'}`}
-            >
-              <div className="message-content">
-                {/* Show sender name for group messages */}
-                {type === 'group' && !message.is_from_me && (
-                  <div className="message-sender">
-                    {message.sender_name || 'Unknown User'}
-                  </div>
-                )}
-                <div className="message-text">{message.content}</div>
-                <div className="message-time">
-                  {formatRelativeTime(message.created_at)}
+          messages.map(message => {
+            const isOwner = user && message.sender_id === user.id;
+            const isEditing = editingMessage === message.id;
+            
+            return (
+              <div
+                key={message.id}
+                className={`message ${message.is_from_me ? 'message-sent' : 'message-received'}`}
+              >
+                <div className="message-content">
+                  {/* Show sender name for group messages */}
+                  {type === 'group' && !message.is_from_me && (
+                    <div className="message-sender">
+                      {message.sender_name || 'Unknown User'}
+                    </div>
+                  )}
+                  
+                  {isEditing ? (
+                    <div className="message-edit">
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        className="message-edit-textarea"
+                        rows="2"
+                        autoFocus
+                      />
+                      <div className="message-edit-actions">
+                        <button
+                          onClick={handleSaveEdit}
+                          disabled={editLoading || !editText.trim()}
+                          className="btn btn-primary btn-sm"
+                        >
+                          {editLoading ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          disabled={editLoading}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="message-text">{message.content}</div>
+                      <div className="message-time">
+                        {formatRelativeTime(message.created_at)}
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Edit/Delete buttons for message owner */}
+                  {isOwner && !isEditing && (
+                    <div className="message-actions">
+                      <button
+                        onClick={() => handleEditMessage(message)}
+                        className="message-action-btn"
+                        title="Edit message"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMessage(message.id)}
+                        disabled={deleteLoading === message.id}
+                        className="message-action-btn delete"
+                        title="Delete message"
+                      >
+                        {deleteLoading === message.id ? '⏳' : '🗑️'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
         <div ref={messagesEndRef} />
       </div>

@@ -34,6 +34,7 @@ var upgrader = websocket.Upgrader{
 			"http://127.0.0.1:5173", // Vite dev server (alternative)
 			"http://localhost:3000", // Docker production frontend
 			"http://127.0.0.1:3000", // Docker production frontend (alternative)
+			"https://eediallo-social-network-frontend.hosting.codeyourfuture.io", // Coolify frontend
 		}
 
 		for _, allowedOrigin := range allowedOrigins {

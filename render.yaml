@@ -1,0 +1,30 @@
+# Render deployment configuration for Social Network Backend
+services:
+  - type: web
+    name: social-network-backend
+    env: go
+    plan: free
+    buildCommand: |
+      cd backend
+      go mod download
+      CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
+    startCommand: ./backend/server
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: HOST
+        value: 0.0.0.0
+      - key: DB_PATH
+        value: /opt/render/project/src/backend/data/app.db
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: https://your-frontend-domain.onrender.com
+    healthCheckPath: /health
+    autoDeploy: true

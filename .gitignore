@@ -15,3 +15,4 @@ backend/.env
 .DS_Store
 social-network.pdf
 cursor_prepare_project_prompts_from_req.md
+.env*

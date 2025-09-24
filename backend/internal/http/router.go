@@ -73,8 +73,7 @@ func NewRouter(db *sql.DB) http.Handler {
 	if len(secretPreview) > 8 {
 		secretPreview = secretPreview[:8] + "..."
 	}
-	log.Printf("Cloudinary config loaded: CloudName=%s, APIKey=%s, APISecret=%s",
-		cloudinaryCfg.CloudName, cloudinaryCfg.APIKey, secretPreview)
+	log.Println("Cloudinary config loaded succesfully")
 
 	cloudinarySvc, err := services.NewCloudinaryService(cloudinaryCfg)
 	if err != nil {

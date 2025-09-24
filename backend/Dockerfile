@@ -22,8 +22,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/serv
 # Final stage
 FROM alpine:latest
 
-# Install ca-certificates and SQLite for HTTPS requests and database
-RUN apk --no-cache add ca-certificates sqlite
+# Install ca-certificates, SQLite, and wget for HTTPS requests, database, and health checks
+RUN apk --no-cache add ca-certificates sqlite wget
 
 # Create app directory
 WORKDIR /app

@@ -194,8 +194,27 @@ func (h *GroupsHandler) Invite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "conflict", http.StatusConflict)
 		return
 	}
-	// notify invited user
-	_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id) VALUES(?,?,?,?,?)", uuid.NewString(), body.UserID, "group_invite", sess.UserID, gid)
+	// notify invited user (live via WebSocket)
+	if h.NotificationService != nil {
+		var actorName, groupTitle string
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&actorName)
+		_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", gid).Scan(&groupTitle)
+		if actorName == "" {
+			actorName = "Someone"
+		}
+		message := actorName + " invited you to join \"" + groupTitle + "\""
+		_ = h.NotificationService.CreateNotification(services.NotificationData{
+			Type:        "group_invite",
+			ActorUserID: sess.UserID,
+			SubjectID:   gid,
+			UserID:      body.UserID,
+			Message:     message,
+			ActionURL:   "/invitations",
+		})
+	} else {
+		// Fallback DB insert if notification service unavailable
+		_, _ = h.DB.Exec("INSERT INTO notifications(id, user_id, type, actor_user_id, subject_id, message, action_url) VALUES(?,?,?,?,?,?,?)", uuid.NewString(), body.UserID, "group_invite", sess.UserID, gid, "You were invited to a group", "/invitations")
+	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": iid, "status": "pending"})
 }
 

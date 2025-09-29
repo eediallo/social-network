@@ -4,11 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strings"
-	"time"
-
 	"social-network/backend/internal/auth"
 	"social-network/backend/internal/services"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )

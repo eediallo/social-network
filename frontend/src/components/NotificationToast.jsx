@@ -49,6 +49,8 @@ export default function NotificationToast({ notification, onClose, onAction }) {
       case 'group_invite':
       case 'group_invitation':
         return '👥';
+      case 'group_created':
+        return '👥';
       case 'group_request':
       case 'group_join_request':
         return '📝';

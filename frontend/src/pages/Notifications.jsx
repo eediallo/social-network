@@ -175,6 +175,7 @@ export default function Notifications() {
       case 'group_accepted': return '🎉';
       case 'group_join_accepted': return '🎉';
       case 'group_event_created': return '📅';
+      case 'group_created': return '👥';
       case 'direct_message': return '💌';
       case 'message': return '💌';
       case 'group_message': return '💬';
@@ -198,6 +199,8 @@ export default function Notifications() {
         return 'requested to join your group';
       case 'group_event_created':
         return 'created a new event in a group';
+      case 'group_created':
+        return 'created a new group';
       case 'direct_message':
       case 'message':
         return 'sent you a message';

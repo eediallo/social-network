@@ -65,8 +65,18 @@ func (h *GroupsHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var createdAt string
 	_ = h.DB.QueryRow("SELECT created_at FROM groups WHERE id = ?", gid).Scan(&createdAt)
 
-	// Note: Group creation notifications are not sent to anyone since the creator is the only member initially
-	// Notifications will be sent when others join the group or when the group is shared
+	// Send a notification to the creator so they see confirmation in notifications (and live toast)
+	if h.NotificationService != nil {
+		message := "You created a new group: " + body.Title
+		_ = h.NotificationService.CreateNotification(services.NotificationData{
+			Type:        "group_created",
+			ActorUserID: sess.UserID,
+			SubjectID:   gid,
+			UserID:      sess.UserID,
+			Message:     message,
+			ActionURL:   "/groups/" + gid,
+		})
+	}
 
 	// Return the complete group data
 	groupData := map[string]interface{}{

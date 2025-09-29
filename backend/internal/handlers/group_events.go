@@ -81,8 +81,17 @@ func (h *GroupEventsHandler) CreateEvent(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Notify group members about the new event
-	h.notifyGroupMembers(groupID, sess.UserID, "group_event_created", eventID)
+	// Notify group members about the new event (live via WebSocket)
+	if h.NotificationService != nil {
+		var groupTitle, creatorName string
+		_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", groupID).Scan(&groupTitle)
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&creatorName)
+		if creatorName == "" {
+			creatorName = "Someone"
+		}
+		message := creatorName + " created a new event in " + groupTitle
+		_ = h.NotificationService.CreateGroupActivityNotification(sess.UserID, groupID, "group_event_created", message)
+	}
 
 	// Return the created event
 	eventData := map[string]interface{}{

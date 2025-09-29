@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,12 +38,28 @@ type userResponse struct {
 	LastName  string `json:"last_name"`
 }
 
+func checkEmail(db *sql.DB, email string) bool {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM users WHERE email = ?", email).Scan(&count)
+	if err != nil {
+		return false
+	}
+	return count > 0
+}
+
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+
+	// Check for existing email before attempting insert
+	if checkEmail(h.DB, req.Email) {
+		http.Error(w, "The email you have provided is already associated with an account", http.StatusBadRequest)
+		return
+	}
+
 	if req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" || req.DateOfBirth == "" {
 		http.Error(w, "missing fields", http.StatusBadRequest)
 		return
@@ -57,6 +74,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		id, req.Email, pwd, req.FirstName, req.LastName, req.DateOfBirth,
 	)
 	if err != nil {
+		// If unique constraint failed on email, return a clearer message
+		if strings.Contains(strings.ToLower(err.Error()), "unique constraint failed") || strings.Contains(strings.ToLower(err.Error()), "unique") {
+			http.Error(w, "The email you have provided is already associated with an account", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "could not create user", http.StatusBadRequest)
 		return
 	}

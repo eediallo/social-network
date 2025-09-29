@@ -24,7 +24,7 @@ export default function Navbar() {
       <div className="container">
         <div className="d-flex justify-between align-center">
           <Link to="/feed" className="navbar-brand">
-            Social Network
+            SN
           </Link>
           
           <div className="d-flex align-center gap-3">

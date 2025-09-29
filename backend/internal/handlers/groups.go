@@ -676,15 +676,16 @@ func (h *GroupsHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Search users by name (excluding current user)
+	// Search only users that the current user is following
 	rows, err := h.DB.Query(`
-		SELECT u.id, u.first_name, u.last_name, u.email, p.cloudinary_avatar_secure_url
-		FROM users u
-		LEFT JOIN profiles p ON p.user_id = u.id
-		WHERE u.id != ? AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)
-		ORDER BY u.first_name, u.last_name
-		LIMIT 20
-	`, sess.UserID, "%"+query+"%", "%"+query+"%", "%"+query+"%")
+        SELECT u.id, u.first_name, u.last_name, u.email, p.cloudinary_avatar_secure_url
+        FROM users u
+        JOIN follows f ON f.followed_user_id = u.id AND f.follower_user_id = ?
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE u.id != ? AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)
+        ORDER BY u.first_name, u.last_name
+        LIMIT 20
+    `, sess.UserID, sess.UserID, "%"+query+"%", "%"+query+"%", "%"+query+"%")
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return

@@ -16,3 +16,4 @@ backend/.env
 social-network.pdf
 cursor_prepare_project_prompts_from_req.md
 .env*
+.air.toml

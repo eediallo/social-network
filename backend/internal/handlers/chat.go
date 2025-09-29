@@ -54,6 +54,19 @@ func (h *ChatHandler) SendDirectMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Enforce mutual follow before allowing DM
+	var isMutual int
+	_ = h.DB.QueryRow(`
+		SELECT CASE WHEN 
+			EXISTS(SELECT 1 FROM follows WHERE follower_user_id = ? AND followed_user_id = ?) 
+			AND EXISTS(SELECT 1 FROM follows WHERE follower_user_id = ? AND followed_user_id = ?)
+		THEN 1 ELSE 0 END
+	`, sess.UserID, body.RecipientID, body.RecipientID, sess.UserID).Scan(&isMutual)
+	if isMutual == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	messageID := uuid.NewString()
 	createdAt := time.Now().Format("2006-01-02T15:04:05Z")
 
@@ -397,6 +410,19 @@ func (h *ChatHandler) ListDirectMessages(w http.ResponseWriter, r *http.Request)
 	}
 
 	otherUserID := chi.URLParam(r, "userId")
+
+	// Enforce mutual follow before listing DMs
+	var isMutual int
+	_ = h.DB.QueryRow(`
+		SELECT CASE WHEN 
+			EXISTS(SELECT 1 FROM follows WHERE follower_user_id = ? AND followed_user_id = ?) 
+			AND EXISTS(SELECT 1 FROM follows WHERE follower_user_id = ? AND followed_user_id = ?)
+		THEN 1 ELSE 0 END
+	`, sess.UserID, otherUserID, otherUserID, sess.UserID).Scan(&isMutual)
+	if isMutual == 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	rows, err := h.DB.Query(`
 		SELECT dm.id, dm.from_user_id, dm.to_user_id, dm.text, dm.created_at, dm.read_at,

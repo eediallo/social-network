@@ -31,7 +31,8 @@ export default function UserSearch({ onInviteUser, groupId, disabled = false }) 
       
       if (res.ok) {
         const users = await res.json();
-        setSearchResults(users);
+        const safeUsers = Array.isArray(users) ? users : [];
+        setSearchResults(safeUsers);
         setShowResults(true);
       } else {
         console.error('Failed to search users');
@@ -92,7 +93,7 @@ export default function UserSearch({ onInviteUser, groupId, disabled = false }) 
         )}
       </div>
 
-      {showResults && searchResults.length > 0 && (
+      {showResults && Array.isArray(searchResults) && searchResults.length > 0 && (
         <div className="user-search-results">
           {searchResults.map((user) => (
             <div key={user.id} className="user-search-result">
@@ -128,7 +129,7 @@ export default function UserSearch({ onInviteUser, groupId, disabled = false }) 
         </div>
       )}
 
-      {showResults && searchQuery && searchResults.length === 0 && !isSearching && (
+      {showResults && searchQuery && Array.isArray(searchResults) && searchResults.length === 0 && !isSearching && (
         <div className="user-search-no-results">
           <p>No users found for "{searchQuery}"</p>
         </div>

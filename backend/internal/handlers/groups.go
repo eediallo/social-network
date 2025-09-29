@@ -207,13 +207,31 @@ func (h *GroupsHandler) AcceptInvitation(w http.ResponseWriter, r *http.Request)
 	}
 	gid := chi.URLParam(r, "id")
 	iid := chi.URLParam(r, "invID")
-	var toUser string
-	if err := h.DB.QueryRow("SELECT to_user_id FROM group_invitations WHERE id = ? AND group_id = ? AND status='pending'", iid, gid).Scan(&toUser); err != nil || toUser != sess.UserID {
+	var toUser, fromUser string
+	if err := h.DB.QueryRow("SELECT to_user_id, from_user_id FROM group_invitations WHERE id = ? AND group_id = ? AND status='pending'", iid, gid).Scan(&toUser, &fromUser); err != nil || toUser != sess.UserID {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	_, _ = h.DB.Exec("INSERT OR IGNORE INTO group_members(group_id, user_id, role) VALUES(?,?,'member')", gid, sess.UserID)
 	_, _ = h.DB.Exec("UPDATE group_invitations SET status='accepted' WHERE id = ?", iid)
+	// Notify inviter that the invitation was accepted
+	if h.NotificationService != nil && fromUser != "" && fromUser != sess.UserID {
+		var actorName, groupTitle string
+		_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&actorName)
+		_ = h.DB.QueryRow("SELECT title FROM groups WHERE id = ?", gid).Scan(&groupTitle)
+		if actorName == "" {
+			actorName = "Someone"
+		}
+		message := actorName + " accepted your invite to join " + groupTitle
+		_ = h.NotificationService.CreateNotification(services.NotificationData{
+			Type:        "group_join_accepted",
+			ActorUserID: sess.UserID,
+			SubjectID:   gid,
+			UserID:      fromUser,
+			Message:     message,
+			ActionURL:   "/groups/" + gid,
+		})
+	}
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
 }
 
@@ -706,6 +724,9 @@ func (h *GroupsHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 		_ = rows.Scan(&u.ID, &u.FirstName, &u.LastName, &u.Email, &avatarURL)
 		u.AvatarURL = avatarURL.String
 		out = append(out, u)
+	}
+	if out == nil {
+		out = []user{}
 	}
 	_ = json.NewEncoder(w).Encode(out)
 }

@@ -250,6 +250,11 @@ func (h *GroupPostsHandler) ListComments(w http.ResponseWriter, r *http.Request)
 		out = append(out, c)
 	}
 
+	// Ensure empty array (not null) when no comments
+	if out == nil {
+		out = []groupComment{}
+	}
+
 	_ = json.NewEncoder(w).Encode(out)
 }
 

@@ -26,7 +26,7 @@ export default function GroupPost({ post, groupId, onPostUpdated, onPostDeleted 
         });
         if (res.ok) {
           const data = await res.json();
-          setCommentCount(data.length);
+          setCommentCount(Array.isArray(data) ? data.length : 0);
         }
       } catch (err) {
         console.error('Error loading comment count:', err);

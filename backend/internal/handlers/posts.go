@@ -491,6 +491,21 @@ func (h *PostsHandler) LikePost(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "server error", http.StatusInternalServerError)
 			return
 		}
+
+		// Notify post owner about the like (if not liking own post)
+		if h.NotificationService != nil {
+			var postOwnerID string
+			if err := h.DB.QueryRow("SELECT user_id FROM posts WHERE id = ?", postID).Scan(&postOwnerID); err == nil && postOwnerID != "" && postOwnerID != sess.UserID {
+				// Get liker name
+				var likerName string
+				_ = h.DB.QueryRow("SELECT first_name || ' ' || last_name FROM users WHERE id = ?", sess.UserID).Scan(&likerName)
+				if likerName == "" {
+					likerName = "Someone"
+				}
+				message := likerName + " liked your post"
+				h.NotificationService.CreatePostNotification(sess.UserID, postID, postOwnerID, "like", message)
+			}
+		}
 	}
 
 	// Get updated like count

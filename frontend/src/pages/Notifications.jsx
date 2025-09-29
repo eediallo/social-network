@@ -169,9 +169,14 @@ export default function Notifications() {
       case 'follow_accepted': return '✅';
       case 'comment': return '💬';
       case 'group_invitation': return '👥';
+      case 'group_invite': return '👥';
       case 'group_request': return '📝';
+      case 'group_join_request': return '📝';
+      case 'group_accepted': return '🎉';
+      case 'group_join_accepted': return '🎉';
       case 'group_event_created': return '📅';
       case 'direct_message': return '💌';
+      case 'message': return '💌';
       case 'group_message': return '💬';
       default: return '🔔';
     }
@@ -186,13 +191,19 @@ export default function Notifications() {
       case 'comment':
         return 'commented on your post';
       case 'group_invitation':
+      case 'group_invite':
         return 'invited you to a group';
       case 'group_request':
+      case 'group_join_request':
         return 'requested to join your group';
       case 'group_event_created':
         return 'created a new event in a group';
       case 'direct_message':
+      case 'message':
         return 'sent you a message';
+      case 'group_accepted':
+      case 'group_join_accepted':
+        return 'accepted your group invitation';
       case 'group_message':
         return 'sent a message in a group';
       default:

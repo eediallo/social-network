@@ -47,10 +47,13 @@ export default function NotificationToast({ notification, onClose, onAction }) {
       case 'follow_accepted':
         return '✅';
       case 'group_invite':
+      case 'group_invitation':
         return '👥';
       case 'group_request':
+      case 'group_join_request':
         return '📝';
       case 'group_accepted':
+      case 'group_join_accepted':
         return '🎉';
       case 'comment':
         return '💭';

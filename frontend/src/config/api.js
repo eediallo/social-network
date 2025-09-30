@@ -1,4 +1,4 @@
-// API configuration
-const API_BASE_URL = 'http://localhost:8080';
+// API configuration - use relative URLs for Docker deployment
+const API_BASE_URL = '';
 
 export default API_BASE_URL;

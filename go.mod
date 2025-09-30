@@ -1,6 +1,6 @@
 module github.com/eediallo/social-network
 
-go 1.24.5
+go 1.23
 
 require (
 	github.com/cloudinary/cloudinary-go/v2 v2.13.0 // indirect
